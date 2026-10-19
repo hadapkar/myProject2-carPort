@@ -1,0 +1,90 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # CarPort's own release key. Without it builds use a throwaway debug key, which is fine
+      # for checking a change but must never be published: the in-app updater (and Android)
+      # only accept updates signed with the key the installed CarPort has.
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CARPORT_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.CARPORT_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "No release keystore secret; building with the debug key."
+            exit 0
+          fi
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/carport-release.p12
+          {
+            echo "storeFile=keystore/carport-release.p12"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=carport"
+            echo "keyPassword=$KEYSTORE_PASSWORD"
+          } > keystore/keystore.properties
+
+      - name: Build, lint and unit test
+        run: ./gradlew assembleRelease :app:testReleaseUnitTest :app:lintRelease
+
+      - name: Patcher tests (patch CarPort's own APK)
+        run: ./gradlew :patcher:test -PtestApk="$PWD/app/build/outputs/apk/release/app-release.apk"
+
+      - name: Check the patched APK with Android's tools
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          APK=patcher/build/patched-fixture.apk
+          "$BT/apksigner" verify --min-sdk-version 35 "$APK"
+          "$BT/zipalign" -c -P 16 4 "$APK"
+          "$BT/aapt2" dump badging "$APK" | grep -E "^package|launchable-activity"
+          "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" | grep -q "android.intent.category.CAR_LAUNCHER"
+          "$BT/aapt2" dump xmltree --file AndroidManifest.xml "$APK" | grep -q "com.google.android.gms.car.application"
+
+      - name: Name the APK
+        id: apk
+        run: |
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          cp app/build/outputs/apk/release/app-release.apk "CarPort-$VERSION.apk"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "file=CarPort-$VERSION.apk" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.apk.outputs.file }}
+          path: ${{ steps.apk.outputs.file }}
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_KEY: ${{ secrets.CARPORT_KEYSTORE_BASE64 != '' }}
+        run: |
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "::error::Refusing to publish: CARPORT_KEYSTORE_BASE64 is not set, so the APK is debug-signed."
+            exit 1
+          fi
+          TAG="${GITHUB_REF_NAME}"
+          if [ "$TAG" != "v${{ steps.apk.outputs.version }}" ]; then
+            echo "::error::Tag $TAG does not match versionName ${{ steps.apk.outputs.version }} in app/build.gradle.kts."
+            exit 1
+          fi
+          gh release create "$TAG" "${{ steps.apk.outputs.file }}" --title "CarPort ${{ steps.apk.outputs.version }}" --generate-notes
