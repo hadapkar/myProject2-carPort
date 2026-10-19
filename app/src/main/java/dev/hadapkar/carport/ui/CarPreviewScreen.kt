@@ -1,6 +1,9 @@
 package dev.hadapkar.carport.ui
 
+import android.media.MediaMetadata
 import android.media.session.MediaController
+import android.media.session.PlaybackState
+import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -32,7 +35,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -119,6 +125,8 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
 
             PlayerCard(preview)
 
+            SeekBar(car) { lastAction = it }
+
             Text("Car screen buttons", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FilledTonalButton(onClick = { car.transportControls.skipToPrevious(); lastAction = "Car: previous" }, modifier = Modifier.weight(1f)) {
@@ -159,6 +167,86 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
             Spacer(Modifier.height(24.dp))
         }
     }
+}
+
+/**
+ * The progress bar exactly as Android Auto gets it: duration, position and the seek permission
+ * are read from CarPort's own session, and dragging seeks through that session like the car does.
+ */
+@Composable
+private fun SeekBar(car: MediaController, onAction: (String) -> Unit) {
+    var state by remember { mutableStateOf(car.playbackState) }
+    var duration by remember { mutableStateOf(car.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L) }
+    var now by remember { mutableStateOf(SystemClock.elapsedRealtime()) }
+    var dragging by remember { mutableStateOf<Float?>(null) }
+
+    DisposableEffect(car) {
+        val callback = object : MediaController.Callback() {
+            override fun onPlaybackStateChanged(newState: PlaybackState?) { state = newState }
+            override fun onMetadataChanged(metadata: MediaMetadata?) {
+                duration = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+            }
+        }
+        car.registerCallback(callback)
+        onDispose { car.unregisterCallback(callback) }
+    }
+    // Tick while playing so the position moves like in the car.
+    LaunchedEffect(state?.state) {
+        while (state?.state == PlaybackState.STATE_PLAYING) {
+            now = SystemClock.elapsedRealtime()
+            delay(500)
+        }
+    }
+
+    val current = state
+    val canSeek = current != null && (current.actions and PlaybackState.ACTION_SEEK_TO) != 0L
+    val position = current?.let {
+        val elapsed = if (it.state == PlaybackState.STATE_PLAYING) ((now - it.lastPositionUpdateTime) * it.playbackSpeed).toLong() else 0L
+        (it.position + elapsed).coerceIn(0L, if (duration > 0) duration else Long.MAX_VALUE)
+    } ?: 0L
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("Progress bar", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        if (duration <= 0) {
+            Text(
+                "The playing app hasn't shared the song's length, so the car shows no progress bar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            return@Column
+        }
+        Slider(
+            value = dragging ?: position.toFloat(),
+            onValueChange = { dragging = it },
+            onValueChangeFinished = {
+                dragging?.let { target ->
+                    car.transportControls.seekTo(target.toLong())
+                    onAction("Car: seek to ${formatTime(target.toLong())}")
+                }
+                dragging = null
+            },
+            valueRange = 0f..duration.toFloat(),
+            enabled = canSeek,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(formatTime((dragging?.toLong()) ?: position), style = MaterialTheme.typography.labelMedium)
+            Text(formatTime(duration), style = MaterialTheme.typography.labelMedium)
+        }
+        Text(
+            if (canSeek) "✓ Seeking allowed: drag the bar; the song should jump to that point."
+            else "Seeking not allowed by the playing app: the car shows the bar but you can't drag it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (canSeek) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val total = ms / 1000
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
 /** Dark card laid out like Android Auto's media player. */

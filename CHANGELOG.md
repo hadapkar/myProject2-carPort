@@ -6,6 +6,14 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.7] - 2026-10-20
+
+### Added
+
+- **Progress bar in "Test without a car"**: shows the song's position and length exactly as
+  Android Auto gets them, whether seeking is allowed, and lets you drag to seek through the same
+  path as the car, so you can check the car's progress bar on the phone.
+
 ## [0.2.6] - 2026-10-20
 
 ### Changed
