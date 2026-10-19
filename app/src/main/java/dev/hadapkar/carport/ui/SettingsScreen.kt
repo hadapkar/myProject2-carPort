@@ -1,32 +1,53 @@
 package dev.hadapkar.carport.ui
 
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Face
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -34,37 +55,55 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
-import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.runtime.remember
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hadapkar.carport.data.Logbook
 import dev.hadapkar.carport.data.SettingsStore
 import dev.hadapkar.carport.media.MediaMirror
 import dev.hadapkar.carport.media.SmartPlay
 import dev.hadapkar.carport.update.UpdateChecker
 
+/**
+ * Settings laid out like Android's own: groups of short rows (icon, title, one line, a switch or
+ * action), status chips, and the longer explanations behind "Learn more".
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: () -> Unit, onTestMedia: () -> Unit) {
+    val context = LocalContext.current
     val options by viewModel.options.collectAsStateWithLifecycle()
     val keyInfo by viewModel.keyInfo.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val setup by viewModel.setup.collectAsStateWithLifecycle()
+    val store = remember { SettingsStore(context) }
+
+    var resumeOnConnect by remember { mutableStateOf(store.resumeOnConnect) }
+    var pauseOnDisconnect by remember { mutableStateOf(store.pauseOnDisconnect) }
+    var smartPlay by remember { mutableStateOf(store.smartPlayEnabled) }
+    var musicLink by remember { mutableStateOf(store.smartPlayUrl) }
+    var canOpenBrowser by remember { mutableStateOf(SmartPlay.canOpenFromBackground(context)) }
+    var editingLink by rememberSaveable { mutableStateOf(false) }
     var confirmImport by rememberSaveable { mutableStateOf(false) }
+    var showFingerprint by rememberSaveable { mutableStateOf(false) }
+
+    // Permissions are granted on system screens; re-check when the user comes back.
+    LifecycleResumeEffect(Unit) {
+        canOpenBrowser = SmartPlay.canOpenFromBackground(context)
+        onPauseOrDispose { }
+    }
 
     val exportKey = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-pkcs12")) { uri ->
         if (uri != null) viewModel.exportKey(uri)
@@ -80,9 +119,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
             LargeTopAppBar(
                 title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
                 },
                 scrollBehavior = scrollBehavior,
             )
@@ -94,166 +131,253 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             (update as? UpdateState.Available)?.let { available ->
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                Group(title = null) {
+                    ActionRow(
+                        icon = Icons.Filled.Refresh,
+                        title = "CarPort ${available.release.version} is available",
+                        summary = "Tap Update to install it",
+                    ) { Button(onClick = viewModel::installUpdate) { Text("Update") } }
+                }
+            }
+
+            // ---- Car music ----
+            Group(
+                title = "Car music",
+                learnMore = "Android Auto shows music playing on your phone (for example in Samsung Browser) in " +
+                    "CarPort's player, and the steering wheel, the car screen and \"Hey Google\" control it. It " +
+                    "runs only while the phone is connected to Android Auto.\n\n" +
+                    "Smart play: if you press play and there's no song to resume (for example the browser tab " +
+                    "was closed), CarPort opens your music link in Samsung Browser, or another browser if Samsung " +
+                    "Browser can't. On a locked phone the page appears after unlocking, and the browser may need " +
+                    "one tap to start. Android only allows opening the browser from the background with " +
+                    "\"Display over other apps\"; CarPort never draws over other apps.",
+            ) {
+                ActionRow(
+                    icon = Icons.Filled.PlayArrow,
+                    title = "Car media controls",
+                    summary = if (setup.mediaAccessGranted) "Ready" else "Needs notification access",
+                    onClick = if (setup.mediaAccessGranted) onTestMedia else onOpenSetup,
+                ) { StatusChip(if (setup.mediaAccessGranted) "On" else "Set up", ok = setup.mediaAccessGranted) }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Face,
+                    title = "Test without a car",
+                    summary = "See and try the car's music player on your phone",
+                    onClick = onTestMedia,
+                ) { Chevron() }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.PlayArrow,
+                    title = "Resume when the car connects",
+                    summary = "Plays a paused song a moment after connecting",
+                    checked = resumeOnConnect,
                 ) {
-                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "CarPort ${available.release.version} is available",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Button(onClick = viewModel::installUpdate) { Text("Update") }
-                    }
+                    resumeOnConnect = it
+                    store.resumeOnConnect = it
                 }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Clear,
+                    title = "Pause when the car disconnects",
+                    summary = "No music from the phone speaker when you leave",
+                    checked = pauseOnDisconnect,
+                ) {
+                    pauseOnDisconnect = it
+                    store.pauseOnDisconnect = it
+                }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Star,
+                    title = "Smart play button",
+                    summary = "Opens your music link when nothing can resume",
+                    checked = smartPlay,
+                ) {
+                    smartPlay = it
+                    store.smartPlayEnabled = it
+                    MediaMirror.refresh()
+                }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Edit,
+                    title = "Music link",
+                    summary = musicLink,
+                    onClick = { editingLink = true },
+                ) { Chevron() }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Notifications,
+                    title = "Display over other apps",
+                    summary = if (canOpenBrowser) "Allowed, so smart play can open the browser" else "Needed for smart play",
+                    onClick = if (canOpenBrowser) null else ({ openOverlayPermission(context) }),
+                ) { StatusChip(if (canOpenBrowser) "Allowed" else "Allow", ok = canOpenBrowser) }
             }
 
-            GroupHeader("Car music")
-            SettingsCard("Car media controls") {
-                Text(
-                    "Android Auto shows music playing on your phone (for example in Samsung Browser) in CarPort's " +
-                        "player, and the steering wheel controls it. It runs only while the phone is connected to " +
-                        "Android Auto.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                CarConnectionSwitches()
-                OutlinedButton(onClick = onTestMedia) { Text("Test without a car") }
-            }
-
-            SmartPlayCard()
-
-            GroupHeader("Patching apps")
-            SettingsCard("Patch options") {
-                SwitchItem(
+            // ---- Patching apps ----
+            Group(
+                title = "Patching apps",
+                learnMore = "These options change how patched apps behave on the car screen. Changes apply the " +
+                    "next time you patch an app; turning an option off and patching again undoes it.\n\n" +
+                    "Keep page open: the app keeps its page or video when it moves between the phone and the car " +
+                    "screen, but a few apps may then draw the wrong layout.\n\n" +
+                    "Repair all patches every patched app again in place, for example if they stop opening after " +
+                    "an Android or Android Auto update. Their data is kept.",
+            ) {
+                SwitchRow(
+                    icon = Icons.Filled.Menu,
                     title = "Unlock screen orientation",
-                    body = "Lets portrait-only apps fill the car's landscape screen.",
+                    summary = "Portrait-only apps fit the car's wide screen",
                     checked = options.unlockOrientation,
-                    onCheckedChange = { viewModel.setOptions(options.copy(unlockOrientation = it)) },
-                )
-                SwitchItem(
+                ) { viewModel.setOptions(options.copy(unlockOrientation = it)) }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Menu,
                     title = "Make screens resizable",
-                    body = "Lets apps resize to the car display instead of showing black bars.",
+                    summary = "No black bars on the car screen",
                     checked = options.forceResizeable,
-                    onCheckedChange = { viewModel.setOptions(options.copy(forceResizeable = it)) },
-                )
-                SwitchItem(
+                ) { viewModel.setOptions(options.copy(forceResizeable = it)) }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Refresh,
                     title = "Keep page open when switching screens",
-                    body = "The app keeps its page or video when it moves between the phone and the car " +
-                        "screen. Some apps may draw the wrong layout; if so, turn this off and patch again.",
+                    summary = "May show a wrong layout in some apps",
                     checked = options.keepStateOnScreenChange,
-                    onCheckedChange = { viewModel.setOptions(options.copy(keepStateOnScreenChange = it)) },
-                )
-                SwitchItem(
-                    title = "Show every launcher icon in the car",
-                    body = "Off: one car icon per app (the icon your phone shows). On: every launcher entry, " +
-                        "including alternate icons.",
+                ) { viewModel.setOptions(options.copy(keepStateOnScreenChange = it)) }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Star,
+                    title = "Show every launcher icon",
+                    summary = "Off: one car icon per app",
                     checked = options.allLauncherEntries,
-                    onCheckedChange = { viewModel.setOptions(options.copy(allLauncherEntries = it)) },
-                )
-                Hint("Changes apply the next time you patch an app. Turning an option off and patching again undoes it.")
+                ) { viewModel.setOptions(options.copy(allLauncherEntries = it)) }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Build,
+                    title = "Repair all patched apps",
+                    summary = "Patch them again after Android updates",
+                    onClick = viewModel::repairAll,
+                ) { Chevron() }
             }
 
-            SettingsCard("Repair") {
-                Text(
-                    "If patched apps stop opening after an Android or Android Auto update, patch them all again " +
-                        "in place. Their data is kept.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                OutlinedButton(onClick = viewModel::repairAll) { Text("Repair all patched apps") }
-            }
-
-            GroupHeader("CarPort")
-            SettingsCard("Updates") {
-                Text("Installed: CarPort ${UpdateChecker.currentVersion}", style = MaterialTheme.typography.bodyMedium)
-                when (val state = update) {
-                    UpdateState.Idle -> Unit
-                    UpdateState.Checking -> Hint("Checking for updates…")
-                    UpdateState.UpToDate -> Hint("✓ You're on the latest version.")
-                    is UpdateState.Available -> Text(
-                        "Version ${state.release.version} is available.",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    is UpdateState.Failed -> Text(
-                        state.message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // ---- CarPort ----
+            Group(
+                title = "CarPort",
+                learnMore = "Every patched app is signed with CarPort's signing key. Android only updates a " +
+                    "patched app in place (keeping its data) when the key matches, so keep a backup and import " +
+                    "it after reinstalling CarPort or switching phones. Only import a key you backed up from " +
+                    "CarPort.",
+            ) {
+                ActionRow(
+                    icon = Icons.Filled.Refresh,
+                    title = "Updates",
+                    summary = "Installed ${UpdateChecker.currentVersion} · " + when (val state = update) {
+                        UpdateState.Idle -> "tap Check"
+                        UpdateState.Checking -> "checking…"
+                        UpdateState.UpToDate -> "up to date"
+                        is UpdateState.Available -> "${state.release.version} available"
+                        is UpdateState.Failed -> state.message
+                    },
+                ) {
                     if (update is UpdateState.Available) {
-                        Button(onClick = viewModel::installUpdate) { Text("Update now") }
+                        Button(onClick = viewModel::installUpdate) { Text("Update") }
+                    } else {
+                        TextButton(
+                            onClick = { viewModel.checkForUpdate(manual = true) },
+                            enabled = update != UpdateState.Checking,
+                        ) { Text("Check") }
                     }
-                    OutlinedButton(
-                        onClick = { viewModel.checkForUpdate(manual = true) },
-                        enabled = update != UpdateState.Checking,
-                    ) { Text("Check for updates") }
                 }
-            }
-
-            SettingsCard("Signing key") {
-                Text(
-                    "Every patched app is signed with this key. Android only updates a patched app in place " +
-                        "(keeping its data) when the key matches, so keep a backup.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                keyInfo?.let { info ->
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Lock,
+                    title = "Signing key",
+                    summary = if (keyInfo?.backedUp == true) "Backed up" else "Not backed up yet: back it up",
+                ) {
+                    FilledTonalButton(onClick = { exportKey.launch("carport-signing-key.p12") }) { Text("Back up") }
+                }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Share,
+                    title = "Import a signing key",
+                    summary = "Use a key backed up from CarPort",
+                    onClick = { confirmImport = true },
+                ) { Chevron() }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Info,
+                    title = "Key fingerprint",
+                    summary = if (showFingerprint) "Tap to hide" else "Tap to show",
+                    onClick = { showFingerprint = !showFingerprint },
+                ) {}
+                if (showFingerprint) {
                     Text(
-                        text = if (info.backedUp) "✓ Backed up" else "Not backed up yet",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (info.backedUp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    )
-                    Text("SHA-256 fingerprint", style = MaterialTheme.typography.labelMedium)
-                    Text(
-                        info.sha256.chunked(2).joinToString(":"),
+                        keyInfo?.sha256?.chunked(2)?.joinToString(":") ?: "Loading…",
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 56.dp, end = 16.dp, bottom = 12.dp),
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { exportKey.launch("carport-signing-key.p12") }) { Text("Back up") }
-                    OutlinedButton(onClick = { confirmImport = true }) { Text("Import") }
-                }
             }
 
-            GroupHeader("Help")
-            SettingsCard("Setup and diagnostics") {
-                Text(
-                    "Patched app not showing in the car? Check the setup steps, especially Android Auto's Unknown sources.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                OutlinedButton(onClick = onOpenSetup) { Text("Open setup guide") }
-                Text(
-                    "Something went wrong? Share the diagnostic log. It lists what CarPort did and any errors, " +
-                        "with no personal data beyond app names.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { shareLog(context) }) { Text("Share log") }
-                    TextButton(onClick = {
+            // ---- Help ----
+            Group(
+                title = "Help",
+                learnMore = "Patched app not showing in the car? Check the setup guide, especially Android Auto's " +
+                    "Unknown sources.\n\n" +
+                    "The diagnostic log lists what CarPort did and any errors, with no personal data beyond app " +
+                    "names. Share it when something doesn't work.\n\n" +
+                    "Safety: use projected apps only when parked or as a passenger. Patched apps are for your own " +
+                    "phone; don't share patched APKs.",
+            ) {
+                ActionRow(
+                    icon = Icons.Filled.Settings,
+                    title = "Setup guide",
+                    summary = "Permissions and Android Auto settings",
+                    onClick = onOpenSetup,
+                ) { Chevron() }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Share,
+                    title = "Share diagnostic log",
+                    summary = "Send it when something doesn't work",
+                    onClick = { shareLog(context) },
+                ) { Chevron() }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Delete,
+                    title = "Clear log",
+                    summary = "Start a fresh log",
+                    onClick = {
                         Logbook.clear()
                         Toast.makeText(context, "Log cleared", Toast.LENGTH_SHORT).show()
-                    }) { Text("Clear log") }
-                }
-            }
-
-            SettingsCard("Safety") {
-                Text(
-                    "Use projected apps only when parked or as a passenger. Never watch or operate them while driving.\n\n" +
-                        "Patched apps are for your own phone. Don't share patched APKs: that can break the original " +
-                        "developers' terms.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                    },
+                ) {}
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Warning,
+                    title = "Drive safely",
+                    summary = "Use the car screen only when parked",
+                ) {}
             }
 
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    if (editingLink) {
+        MusicLinkDialog(
+            initial = musicLink,
+            onSave = {
+                musicLink = it
+                store.smartPlayUrl = it
+                editingLink = false
+                MediaMirror.refresh()
+            },
+            onDismiss = { editingLink = false },
+        )
     }
 
     if (confirmImport) {
@@ -277,140 +401,126 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
     }
 }
 
-/** What happens to the music when the phone connects to or disconnects from the car. */
+/** Edits the smart play link, with validation and a one-tap default. */
 @Composable
-private fun CarConnectionSwitches() {
-    val context = LocalContext.current
-    val store = remember { SettingsStore(context) }
-    var resume by remember { mutableStateOf(store.resumeOnConnect) }
-    var pause by remember { mutableStateOf(store.pauseOnDisconnect) }
-    SwitchItem(
-        title = "Resume when the car connects",
-        body = "If a song is paused (for example in Samsung Browser), play it a moment after the phone connects to Android Auto.",
-        checked = resume,
-        onCheckedChange = {
-            resume = it
-            store.resumeOnConnect = it
-        },
-    )
-    SwitchItem(
-        title = "Pause when the car disconnects",
-        body = "Stops the music continuing out loud from the phone speaker when you leave the car.",
-        checked = pause,
-        onCheckedChange = {
-            pause = it
-            store.pauseOnDisconnect = it
-        },
-    )
-}
-
-/** Smart play button: open a saved music link when play is pressed and nothing can be resumed. */
-@Composable
-private fun SmartPlayCard() {
-    val context = LocalContext.current
-    val store = remember { SettingsStore(context) }
-    var enabled by remember { mutableStateOf(store.smartPlayEnabled) }
-    var link by remember { mutableStateOf(store.smartPlayUrl) }
-    var canOpen by remember { mutableStateOf(SmartPlay.canOpenFromBackground(context)) }
-    // The permission is granted on a system screen; re-check when the user comes back.
-    LifecycleResumeEffect(Unit) {
-        canOpen = SmartPlay.canOpenFromBackground(context)
-        onPauseOrDispose { }
-    }
-    val linkValid = SmartPlay.isValidLink(link)
-
-    SettingsCard("Smart play button") {
-        Text(
-            "If you press play in the car and there's no song to resume (for example the browser tab was " +
-                "closed), CarPort opens this link in Samsung Browser (or another browser if Samsung Browser " +
-                "can't) instead of doing nothing. If the phone is " +
-                "locked, the page appears after you unlock it, and the browser may need one tap to start.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        SwitchItem(
-            title = "Open my music link when nothing is playing",
-            body = "Works with the steering wheel, the car's play button and \"Hey Google, play\".",
-            checked = enabled,
-            onCheckedChange = {
-                enabled = it
-                store.smartPlayEnabled = it
-                MediaMirror.refresh()
-            },
-        )
-        OutlinedTextField(
-            value = link,
-            onValueChange = {
-                link = it
-                if (SmartPlay.isValidLink(it)) store.smartPlayUrl = it
-            },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Music link") },
-            placeholder = { Text("https://music.youtube.com/playlist?list=…") },
-            singleLine = true,
-            isError = !linkValid,
-            supportingText = {
+private fun MusicLinkDialog(initial: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var link by remember { mutableStateOf(initial) }
+    val valid = SmartPlay.isValidLink(link)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Music link") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    if (linkValid) "Paste a YouTube Music playlist, album or song link, or any web address."
-                    else "Enter a web address starting with https://"
+                    "Paste a YouTube Music playlist, album or song link (Share › Copy link in YouTube Music), " +
+                        "or any web address.",
+                    style = MaterialTheme.typography.bodyMedium,
                 )
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                OutlinedTextField(
+                    value = link,
+                    onValueChange = { link = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("https://music.youtube.com/playlist?list=…") },
+                    singleLine = true,
+                    isError = !valid,
+                    supportingText = { if (!valid) Text("Enter a web address starting with https://") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                )
+                TextButton(onClick = { link = SettingsStore.DEFAULT_SMART_PLAY_URL }) { Text("Use YouTube Music home") }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(link.trim()) }, enabled = valid) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** A titled card of rows, with an optional "Learn more" that expands the longer explanation. */
+@Composable
+private fun Group(title: String?, learnMore: String? = null, content: @Composable () -> Unit) {
+    var expanded by rememberSaveable(title) { mutableStateOf(false) }
+    if (title != null) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, top = 12.dp, bottom = 2.dp),
         )
-        TextButton(onClick = {
-            link = SettingsStore.DEFAULT_SMART_PLAY_URL
-            store.smartPlayUrl = link
-        }) { Text("Use YouTube Music home") }
-        if (canOpen) {
-            Text(
-                "✓ Display over other apps is allowed",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        } else {
-            Text(
-                "Android only lets CarPort open the browser from the background with \"Display over other " +
-                    "apps\". CarPort never draws over other apps.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-            Button(onClick = { openOverlayPermission(context) }) { Text("Allow display over other apps") }
-        }
     }
-}
-
-/** A group heading above related cards, like Android's own Settings. */
-@Composable
-private fun GroupHeader(title: String) {
-    Text(
-        title.uppercase(),
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
-    )
-}
-
-@Composable
-private fun SettingsCard(title: String, content: @Composable () -> Unit) {
     ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        Column(Modifier.padding(vertical = 4.dp)) {
             content()
+            if (learnMore != null) {
+                Divider()
+                TextButton(onClick = { expanded = !expanded }, modifier = Modifier.padding(start = 8.dp)) {
+                    Text(if (expanded) "Show less" else "Learn more")
+                }
+                if (expanded) {
+                    Text(
+                        learnMore,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    )
+                }
+            }
         }
     }
 }
 
+/** Icon, title, one-line summary, and a trailing control; the whole row is tappable when [onClick] is set. */
 @Composable
-private fun SwitchItem(title: String, body: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun ActionRow(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    onClick: (() -> Unit)? = null,
+    trailing: @Composable () -> Unit,
+) {
     ListItem(
+        modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+        leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
         headlineContent = { Text(title) },
-        supportingContent = { Text(body) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+        supportingContent = { Text(summary, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        trailingContent = trailing,
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        modifier = Modifier.fillMaxWidth(),
     )
 }
 
+/** A switch row; tapping anywhere on the row toggles it. */
 @Composable
-private fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun SwitchRow(
+    icon: ImageVector,
+    title: String,
+    summary: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    ActionRow(icon, title, summary, onClick = { onCheckedChange(!checked) }) {
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun StatusChip(text: String, ok: Boolean) {
+    Surface(
+        shape = CircleShape,
+        color = if (ok) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.tertiaryContainer,
+    ) {
+        Text(
+            text = if (ok) "✓ $text" else text,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (ok) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+        )
+    }
+}
+
+@Composable
+private fun Chevron() {
+    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun Divider() {
+    HorizontalDivider(Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant)
 }

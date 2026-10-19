@@ -6,6 +6,16 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.3.3] - 2026-10-20
+
+### Changed
+
+- **Friendlier Settings**, laid out like Android's own: short rows with an icon, a title and one
+  line, switches you can toggle by tapping the whole row, status chips ("✓ On", "Allowed",
+  "Set up"), and the longer explanations behind "Learn more" in each group.
+- The music link is edited in its own dialog with validation and a one-tap YouTube Music default.
+- The signing key fingerprint is hidden until you tap "Key fingerprint".
+
 ## [0.3.2] - 2026-10-20
 
 ### Changed
