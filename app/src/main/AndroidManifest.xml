@@ -47,6 +47,10 @@
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+        <!-- Monochrome icon Android Auto uses for CarPort in its media bar and notifications. -->
+        <meta-data
+            android:name="com.google.android.gms.car.notification.SmallIcon"
+            android:resource="@drawable/ic_launcher_monochrome" />
         <service
             android:name=".media.CarMediaService"
             android:exported="true"

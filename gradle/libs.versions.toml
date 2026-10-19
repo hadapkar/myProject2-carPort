@@ -10,6 +10,7 @@ arsclib = "1.3.5"
 apksig = "8.7.3"
 bouncycastle = "1.78.1"
 junit = "4.13.2"
+carApp = "1.4.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -28,6 +29,7 @@ arsclib = { group = "io.github.reandroid", name = "ARSCLib", version.ref = "arsc
 apksig = { group = "com.android.tools.build", name = "apksig", version.ref = "apksig" }
 bouncycastle-pkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-car-app = { group = "androidx.car.app", name = "app", version.ref = "carApp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

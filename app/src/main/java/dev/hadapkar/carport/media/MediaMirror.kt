@@ -1,7 +1,9 @@
 package dev.hadapkar.carport.media
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSession
@@ -11,6 +13,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import dev.hadapkar.carport.MainActivity
 import dev.hadapkar.carport.data.Logbook
 
 /**
@@ -45,6 +48,14 @@ object MediaMirror {
         sessionManager = app.getSystemService(MediaSessionManager::class.java)
         return MediaSession(app, "CarPort").apply {
             setCallback(ForwardingCallback(), handler)
+            // "Open on phone" from the car's media screen opens CarPort.
+            setSessionActivity(
+                PendingIntent.getActivity(
+                    app, 0,
+                    Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    PendingIntent.FLAG_IMMUTABLE,
+                )
+            )
             session = this
             mirror()
         }
@@ -83,6 +94,23 @@ object MediaMirror {
 
     val sourcePackage: String? get() = source?.packageName
     val sourceTitle: String? get() = source?.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+    val sourceArtist: String? get() = source?.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+
+    /** The track's artwork, scaled down so a browse result stays well under Android's binder limit. */
+    fun sourceArt(): Bitmap? {
+        val metadata = source?.metadata ?: return null
+        val art = ART_KEYS.firstNotNullOfOrNull { metadata.getBitmap(it) } ?: return null
+        val scale = MAX_BROWSE_ART_PX.toFloat() / maxOf(art.width, art.height)
+        return if (scale >= 1f) art
+        else Bitmap.createScaledBitmap(art, (art.width * scale).toInt().coerceAtLeast(1), (art.height * scale).toInt().coerceAtLeast(1), true)
+    }
+
+    private val ART_KEYS = listOf(
+        MediaMetadata.METADATA_KEY_ALBUM_ART,
+        MediaMetadata.METADATA_KEY_ART,
+        MediaMetadata.METADATA_KEY_DISPLAY_ICON,
+    )
+    private const val MAX_BROWSE_ART_PX = 256
 
     fun sourceLabel(): String? {
         val pkg = source?.packageName ?: return null

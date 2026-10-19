@@ -6,6 +6,16 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.3] - 2026-10-20
+
+### Improved
+
+- **Car media controls run only while the phone is connected to Android Auto**, and stop
+  completely when it disconnects.
+- Android Auto's player for CarPort now gets everything YT Music shows: the track's artwork in
+  the browse list, title, artist and app name, list styling, a monochrome CarPort icon for the
+  media bar, and "open on phone".
+
 ## [0.2.2] - 2026-10-20
 
 ### Improved
