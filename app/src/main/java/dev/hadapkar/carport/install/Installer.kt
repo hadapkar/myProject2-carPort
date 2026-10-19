@@ -51,10 +51,11 @@ object Installer {
     fun nextAttempt(): Int = attempts.getAndIncrement()
 
     /**
-     * Installs [apks] (base first, then splits) as one session and returns the session id.
+     * Installs [apks] (base first, then splits) as one session. [onSession] receives the session
+     * id before the commit, so the caller can abandon it no matter how fast Android answers.
      * Blocking: call off the main thread.
      */
-    fun install(context: Context, packageName: String, apks: List<File>, attempt: Int): Int {
+    fun install(context: Context, packageName: String, apks: List<File>, attempt: Int, onSession: (Int) -> Unit) {
         val installer = context.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
             setAppPackageName(packageName)
@@ -64,6 +65,7 @@ object Installer {
             setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
         }
         val sessionId = installer.createSession(params)
+        onSession(sessionId)
         try {
             installer.openSession(sessionId).use { session ->
                 for (apk in apks) {
@@ -78,7 +80,6 @@ object Installer {
             runCatching { installer.abandonSession(sessionId) }
             throw e
         }
-        return sessionId
     }
 
     /** Asks Android to uninstall [packageName]; the user confirms in a system dialog. */

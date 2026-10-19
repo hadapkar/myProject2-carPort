@@ -127,11 +127,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         /** INSTALL_PATCHED only: the original was uninstalled for this install, so failing loses the app. */
         val originalRemoved: Boolean = false,
     ) {
-        var sessionId: Int? = null
+        /** Set from the install thread before the commit. */
+        @Volatile var sessionId: Int? = null
         var confirmIntent: Intent? = null
     }
 
     private class Retry(val label: String, val result: PatchResult, val originalRemoved: Boolean)
+
+    /**
+     * An uninstall of the original that CarPort stopped waiting for (cancelled or reported as
+     * failed). Android can't take an uninstall request back, and a confirmation screen may still
+     * be open, so the patched APKs are kept: if the original disappears later, CarPort installs
+     * the patched copy on its next resume instead of leaving the user with nothing.
+     */
+    private var unresolvedUninstall: Retry? = null
 
     private var waiting: Waiting? = null
     private var retry: Retry? = null
@@ -150,6 +159,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * [userInitiated] (pull to refresh) also shows the refresh indicator.
      */
     fun refresh(userInitiated: Boolean = false) {
+        resumeUnresolvedUninstall()
         _setup.value = SetupStatus(
             canInstallApps = context.packageManager.canRequestPackageInstalls(),
             androidAutoInstalled = InstalledApps.isInstalled(context, InstalledApps.ANDROID_AUTO_PACKAGE),
@@ -172,6 +182,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (refreshJob === coroutineContext.job) _refreshing.value = false
             }
         }
+    }
+
+    private fun resumeUnresolvedUninstall() {
+        val unresolved = unresolvedUninstall ?: return
+        if (_job.value is JobState.Working || waiting != null) return
+        if (InstalledApps.isInstalled(context, unresolved.result.packageName)) return
+        // The original was removed after all: install the patched copy now.
+        unresolvedUninstall = null
+        retry = null
+        viewModelScope.launch { installPatched(unresolved.label, unresolved.result, originalRemoved = true) }
     }
 
     fun setOptions(options: PatchOptions) {
@@ -200,6 +220,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun startJob(label: String, prepare: (workDir: File) -> Pair<File, List<File>>) {
         if (_job.value != JobState.Idle) return
         retry = null
+        unresolvedUninstall = null
         _job.value = JobState.Working(label, "Preparing")
         viewModelScope.launch {
             try {
@@ -260,7 +281,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // Not cancellable while the APKs are copied into the session; only once Android has it.
         _job.value = JobState.Working(label, "Installing")
         try {
-            wait.sessionId = withContext(patchFiles) { Installer.install(context, result.packageName, result.apks, attempt) }
+            withContext(patchFiles) {
+                Installer.install(context, result.packageName, result.apks, attempt) { wait.sessionId = it }
+            }
             markCancellableIfStillWaiting(wait, "Installing")
         } catch (e: CancellationException) {
             throw e
@@ -358,8 +381,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 waiting = wait
                 val step = "Installing. CarPort closes when the update is done; open it again afterwards."
                 _job.value = JobState.Working(title, step)
-                wait.sessionId = withContext(patchFiles) {
-                    Installer.install(context, context.packageName, listOf(apk), attempt)
+                withContext(patchFiles) {
+                    Installer.install(context, context.packageName, listOf(apk), attempt) { wait.sessionId = it }
                 }
                 markCancellableIfStillWaiting(wait, step)
             } catch (e: CancellationException) {
@@ -401,7 +424,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (event.isSuccess) {
                     installPatched(wait.label, wait.result!!, originalRemoved = true)
                 } else {
-                    finishAndClean("${wait.label} was not uninstalled", Installer.describeFailure(event))
+                    keepForUnresolvedUninstall(wait, "${wait.label} was not uninstalled", Installer.describeFailure(event))
                 }
 
             Stage.INSTALL_PATCHED -> {
@@ -457,12 +480,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val message = reason ?: "Cancelled."
         when (wait.stage) {
             Stage.INSTALL_PATCHED -> failInstall(wait.label, wait.result!!, wait.originalRemoved, message)
-            Stage.UNINSTALL_ORIGINAL -> finishAndClean(
-                "${wait.label} was not changed",
-                "$message If Android's uninstall screen is still open, close it without confirming.",
-            )
+            Stage.UNINSTALL_ORIGINAL -> keepForUnresolvedUninstall(wait, "${wait.label} was not changed", message)
             Stage.RESTORE_ORIGINAL, Stage.SELF_UPDATE -> _job.value = JobState.Finished(false, wait.label, message)
         }
+    }
+
+    private fun keepForUnresolvedUninstall(wait: Waiting, title: String, message: String) {
+        unresolvedUninstall = Retry(wait.label, wait.result!!, originalRemoved = true)
+        retry = null
+        _job.value = JobState.Finished(
+            false,
+            title,
+            "$message\n\nIf you still confirm Android's uninstall screen, CarPort installs the patched copy " +
+                "the next time you open it.",
+        )
     }
 
     fun onUserActionLaunched(action: UserAction) {
@@ -478,7 +509,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (_job.value is JobState.Working) return
         retry = null
         _job.value = JobState.Idle
-        cleanUpPatchFiles()
+        // Keep the patched APKs while an uninstall might still complete; the next job replaces them.
+        if (unresolvedUninstall == null) cleanUpPatchFiles()
+        resumeUnresolvedUninstall()
     }
 
     private fun finishAndClean(title: String, message: String, success: Boolean = false) {

@@ -63,7 +63,8 @@ fun JobDialogs(
                 Text(
                     "The installed ${job.label} is signed by its developer, so Android must uninstall it before the " +
                         "patched copy can be installed.\n\nThis erases the app's data on this phone (logins, settings, " +
-                        "downloads). Patching it again later keeps its data."
+                        "downloads). Patching it again later keeps its data.\n\nIf this app is also in your private " +
+                        "space or a cloned profile, remove it there first, or the install will fail."
                 )
             },
             confirmButton = { TextButton(onClick = onConfirmUninstall) { Text("Uninstall & continue") } },
