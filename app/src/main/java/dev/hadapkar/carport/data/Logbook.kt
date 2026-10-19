@@ -56,6 +56,13 @@ object Logbook {
         }
     }
 
+    /** The last [count] log lines that contain [filter] (stack-trace lines skipped), oldest first. */
+    @Synchronized
+    fun recent(count: Int, filter: String): List<String> {
+        val text = runCatching { file?.readText() }.getOrNull().orEmpty()
+        return text.lineSequence().filter { filter in it && !it.startsWith("\t") }.toList().takeLast(count)
+    }
+
     @Synchronized
     fun clear() {
         runCatching { file?.writeText("") }

@@ -6,6 +6,15 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.4] - 2026-10-20
+
+### Added
+
+- **Test car media controls without a car** (Settings › Car media controls, or the setup guide).
+  It shows what Android Auto would show for the music playing on your phone, with the car's
+  screen buttons and simulated steering-wheel buttons, which take the same path as in the car,
+  plus a live log of what happened.
+
 ## [0.2.3] - 2026-10-20
 
 ### Improved

@@ -48,7 +48,7 @@ import dev.hadapkar.carport.update.UpdateChecker
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: () -> Unit) {
+fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: () -> Unit, onTestMedia: () -> Unit) {
     val options by viewModel.options.collectAsStateWithLifecycle()
     val keyInfo by viewModel.keyInfo.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
@@ -113,6 +113,16 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                     onCheckedChange = { viewModel.setOptions(options.copy(allLauncherEntries = it)) },
                 )
                 Hint("Changes apply the next time you patch an app. Turning an option off and patching again undoes it.")
+            }
+
+            SettingsCard("Car media controls") {
+                Text(
+                    "Android Auto shows music playing on your phone (for example in Samsung Browser) in CarPort's " +
+                        "player, and the steering wheel controls it. It runs only while the phone is connected to " +
+                        "Android Auto.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = onTestMedia) { Text("Test without a car") }
             }
 
             SettingsCard("Repair") {

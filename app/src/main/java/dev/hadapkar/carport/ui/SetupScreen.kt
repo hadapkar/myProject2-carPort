@@ -43,7 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 /** First-run guide: the three things that must be in place before a patched app shows up in the car. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
+fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit, onTestMedia: () -> Unit) {
     val context = LocalContext.current
     val setup by viewModel.setup.collectAsStateWithLifecycle()
     val keyInfo by viewModel.keyInfo.collectAsStateWithLifecycle()
@@ -122,6 +122,8 @@ fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
                     FilledTonalButton(onClick = { openCarPortAppInfo(context) }) { Text("Allow restricted settings") }
                     FilledTonalButton(onClick = { openMediaAccess(context) }) { Text("Allow access") }
                 }
+            } else {
+                FilledTonalButton(onClick = onTestMedia) { Text("Test without a car") }
             }
 
             StepCard(

@@ -21,11 +21,12 @@ class CarMediaService : MediaBrowserService() {
         sessionToken = MediaMirror.sessionToken(this)
         MediaMirror.onSourceChanged = { notifyChildrenChanged(ROOT_ID) }
         // Android Auto binding this service means the phone is in the car.
-        MediaMirror.start(this)
+        MediaMirror.onServiceBound(this, bound = true)
     }
 
     override fun onDestroy() {
         MediaMirror.onSourceChanged = null
+        MediaMirror.onServiceBound(this, bound = false)
         super.onDestroy()
     }
 

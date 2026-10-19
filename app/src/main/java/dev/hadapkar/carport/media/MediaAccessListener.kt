@@ -21,7 +21,7 @@ class MediaAccessListener : NotificationListenerService() {
     private val connectionObserver = Observer<Int> { type ->
         val connected = type == CarConnection.CONNECTION_TYPE_PROJECTION || type == CarConnection.CONNECTION_TYPE_NATIVE
         Logbook.log("Android Auto ${if (connected) "connected" else "not connected"} (type $type)")
-        if (connected) MediaMirror.start(this) else MediaMirror.stop()
+        MediaMirror.onCarConnection(this, connected)
     }
 
     override fun onListenerConnected() {
@@ -32,6 +32,7 @@ class MediaAccessListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         connectionType?.removeObserver(connectionObserver)
         connectionType = null
+        // Access is gone: nothing can be mirrored any more.
         MediaMirror.stop()
         super.onListenerDisconnected()
     }

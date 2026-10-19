@@ -15,6 +15,9 @@ import android.os.Looper
 import android.view.KeyEvent
 import dev.hadapkar.carport.MainActivity
 import dev.hadapkar.carport.data.Logbook
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Mirrors the phone's playing media session (e.g. Samsung Browser playing music) into
@@ -38,6 +41,52 @@ object MediaMirror {
 
     /** Called when the mirrored app changes, so Android Auto's browse list can refresh. */
     var onSourceChanged: (() -> Unit)? = null
+
+    /** What the car would show; drives CarPort's "Test car media controls" screen. */
+    data class Preview(
+        val running: Boolean = false,
+        val sourceApp: String? = null,
+        val title: String? = null,
+        val artist: String? = null,
+        val art: Bitmap? = null,
+        val playing: Boolean = false,
+        val state: String = "Not running",
+    )
+
+    private val _preview = MutableStateFlow(Preview())
+    val preview: StateFlow<Preview> = _preview.asStateFlow()
+
+    // Why the mirror is running. It stops once none of these holds.
+    private var carConnected = false
+    private var testMode = false
+    private var serviceBound = false
+
+    /** From the Android Auto connection watcher. */
+    fun onCarConnection(context: Context, connected: Boolean) {
+        carConnected = connected
+        if (connected) start(context) else stopIfUnused()
+    }
+
+    /** Android Auto bound (or unbound) CarPort's media service. */
+    fun onServiceBound(context: Context, bound: Boolean) {
+        serviceBound = bound
+        if (bound) start(context) else stopIfUnused()
+    }
+
+    /** The test screen runs the mirror without a car. */
+    fun startTest(context: Context) {
+        testMode = true
+        start(context)
+    }
+
+    fun stopTest() {
+        testMode = false
+        stopIfUnused()
+    }
+
+    private fun stopIfUnused() {
+        if (!carConnected && !serviceBound && !testMode) stop()
+    }
 
     fun sessionToken(context: Context): MediaSession.Token = ensureSession(context).sessionToken
 
@@ -83,13 +132,15 @@ object MediaMirror {
         }
     }
 
-    /** Notification access was revoked or the listener stopped. */
+    /** Stops following media sessions (car disconnected, test screen closed, or access revoked). */
     fun stop() {
         if (listening) {
             runCatching { sessionManager?.removeOnActiveSessionsChangedListener(sessionsListener) }
             listening = false
+            Logbook.log("Car media: stopped")
         }
         setSource(null)
+        mirror()
     }
 
     val sourcePackage: String? get() = source?.packageName
@@ -187,6 +238,14 @@ object MediaMirror {
             )
             // Don't claim media buttons or Android Auto's attention when nothing is playing.
             session.isActive = false
+            _preview.value = Preview(
+                running = listening,
+                state = when {
+                    !MediaAccessListener.isGranted(app) -> "Notification access is off"
+                    !listening -> "Not running"
+                    else -> "Nothing is playing"
+                },
+            )
             return
         }
 
@@ -215,6 +274,24 @@ object MediaMirror {
             }
         )
         session.isActive = true
+        _preview.value = Preview(
+            running = listening,
+            sourceApp = sourceLabel(),
+            title = sourceTitle,
+            artist = sourceArtist,
+            art = sourceArt(),
+            playing = sourceState?.state == PlaybackState.STATE_PLAYING,
+            state = stateName(sourceState?.state),
+        )
+    }
+
+    private fun stateName(state: Int?): String = when (state) {
+        PlaybackState.STATE_PLAYING -> "Playing"
+        PlaybackState.STATE_PAUSED -> "Paused"
+        PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING -> "Loading"
+        PlaybackState.STATE_STOPPED -> "Stopped"
+        PlaybackState.STATE_ERROR -> "Error"
+        else -> "Idle"
     }
 
     /** Sends the car's button presses to the app that is actually playing. */
