@@ -6,6 +6,16 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.3.2] - 2026-10-20
+
+### Changed
+
+- **"Test without a car" looks like Android Auto's music player**: a car-display frame with
+  Android Auto's app rail, blurred artwork background, large artwork, title, artist and app,
+  a white progress bar with times, and the round play button between previous and next.
+- **Settings are organised into groups**: Car music, Patching apps, CarPort (updates and
+  signing key) and Help, with an update banner at the top when a new version is available.
+
 ## [0.3.1] - 2026-10-20
 
 ### Added

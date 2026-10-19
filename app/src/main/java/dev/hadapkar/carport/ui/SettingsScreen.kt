@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -94,6 +96,38 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            (update as? UpdateState.Available)?.let { available ->
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "CarPort ${available.release.version} is available",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(onClick = viewModel::installUpdate) { Text("Update") }
+                    }
+                }
+            }
+
+            GroupHeader("Car music")
+            SettingsCard("Car media controls") {
+                Text(
+                    "Android Auto shows music playing on your phone (for example in Samsung Browser) in CarPort's " +
+                        "player, and the steering wheel controls it. It runs only while the phone is connected to " +
+                        "Android Auto.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                CarConnectionSwitches()
+                OutlinedButton(onClick = onTestMedia) { Text("Test without a car") }
+            }
+
+            SmartPlayCard()
+
+            GroupHeader("Patching apps")
             SettingsCard("Patch options") {
                 SwitchItem(
                     title = "Unlock screen orientation",
@@ -124,19 +158,6 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 Hint("Changes apply the next time you patch an app. Turning an option off and patching again undoes it.")
             }
 
-            SettingsCard("Car media controls") {
-                Text(
-                    "Android Auto shows music playing on your phone (for example in Samsung Browser) in CarPort's " +
-                        "player, and the steering wheel controls it. It runs only while the phone is connected to " +
-                        "Android Auto.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                CarConnectionSwitches()
-                OutlinedButton(onClick = onTestMedia) { Text("Test without a car") }
-            }
-
-            SmartPlayCard()
-
             SettingsCard("Repair") {
                 Text(
                     "If patched apps stop opening after an Android or Android Auto update, patch them all again " +
@@ -146,32 +167,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 OutlinedButton(onClick = viewModel::repairAll) { Text("Repair all patched apps") }
             }
 
-            SettingsCard("Signing key") {
-                Text(
-                    "Every patched app is signed with this key. Android only updates a patched app in place " +
-                        "(keeping its data) when the key matches, so keep a backup.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                keyInfo?.let { info ->
-                    Text(
-                        text = if (info.backedUp) "✓ Backed up" else "Not backed up yet",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (info.backedUp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                    )
-                    Text("SHA-256 fingerprint", style = MaterialTheme.typography.labelMedium)
-                    Text(
-                        info.sha256.chunked(2).joinToString(":"),
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { exportKey.launch("carport-signing-key.p12") }) { Text("Back up") }
-                    OutlinedButton(onClick = { confirmImport = true }) { Text("Import") }
-                }
-            }
-
+            GroupHeader("CarPort")
             SettingsCard("Updates") {
                 Text("Installed: CarPort ${UpdateChecker.currentVersion}", style = MaterialTheme.typography.bodyMedium)
                 when (val state = update) {
@@ -200,7 +196,34 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 }
             }
 
-            SettingsCard("Help") {
+            SettingsCard("Signing key") {
+                Text(
+                    "Every patched app is signed with this key. Android only updates a patched app in place " +
+                        "(keeping its data) when the key matches, so keep a backup.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                keyInfo?.let { info ->
+                    Text(
+                        text = if (info.backedUp) "✓ Backed up" else "Not backed up yet",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (info.backedUp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    )
+                    Text("SHA-256 fingerprint", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        info.sha256.chunked(2).joinToString(":"),
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { exportKey.launch("carport-signing-key.p12") }) { Text("Back up") }
+                    OutlinedButton(onClick = { confirmImport = true }) { Text("Import") }
+                }
+            }
+
+            GroupHeader("Help")
+            SettingsCard("Setup and diagnostics") {
                 Text(
                     "Patched app not showing in the car? Check the setup steps, especially Android Auto's Unknown sources.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -353,6 +376,17 @@ private fun SmartPlayCard() {
             Button(onClick = { openOverlayPermission(context) }) { Text("Allow display over other apps") }
         }
     }
+}
+
+/** A group heading above related cards, like Android's own Settings. */
+@Composable
+private fun GroupHeader(title: String) {
+    Text(
+        title.uppercase(),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+    )
 }
 
 @Composable
