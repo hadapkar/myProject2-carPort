@@ -6,6 +6,16 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.1] - 2026-10-20
+
+### Improved
+
+- **Steering-wheel buttons** for car media controls: button presses are passed straight to the
+  playing app (for example Samsung Browser), like a Bluetooth headset button, so next/previous
+  work even when the app doesn't advertise them.
+- Play/pause and next/previous always show in the car; when the app has no matching action,
+  CarPort sends the media key instead.
+
 ## [0.2.0] - 2026-10-20
 
 ### Added

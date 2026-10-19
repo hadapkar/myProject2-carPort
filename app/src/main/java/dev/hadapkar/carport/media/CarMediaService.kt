@@ -1,5 +1,6 @@
 package dev.hadapkar.carport.media
 
+import android.content.Intent
 import android.media.MediaDescription
 import android.media.MediaMetadata
 import android.media.browse.MediaBrowser
@@ -11,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.service.media.MediaBrowserService
+import android.view.KeyEvent
 import dev.hadapkar.carport.data.Logbook
 
 /**
@@ -177,7 +179,7 @@ class CarMediaService : MediaBrowserService() {
         val state = if (sourceState != null) {
             PlaybackState.Builder(sourceState)
                 .setActions(
-                    sourceState.actions and FORWARDED_ACTIONS or
+                    sourceState.actions and FORWARDED_ACTIONS or ALWAYS_SHOWN_ACTIONS or
                         PlaybackState.ACTION_PLAY_FROM_MEDIA_ID or PlaybackState.ACTION_PLAY_FROM_SEARCH
                 )
                 .build()
@@ -197,11 +199,38 @@ class CarMediaService : MediaBrowserService() {
     /** Sends the car's button presses to the app that is actually playing. */
     private inner class ForwardingCallback : MediaSession.Callback() {
         private val controls get() = source?.transportControls
+
+        /**
+         * Steering-wheel and headset buttons: pass the raw key press to the playing app, exactly
+         * as if a Bluetooth headset sent it, so the app decides (e.g. a website's next track).
+         * This works even when the app doesn't advertise the matching action.
+         */
+        override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+            val event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+            val controller = source
+            if (event != null && controller != null && controller.dispatchMediaButtonEvent(event)) {
+                if (event.action == KeyEvent.ACTION_DOWN) Logbook.log("Car media: forwarded key ${event.keyCode} to ${controller.packageName}")
+                return true
+            }
+            return super.onMediaButtonEvent(mediaButtonIntent)
+        }
         override fun onPlay() { controls?.play() }
         override fun onPause() { controls?.pause() }
         override fun onStop() { controls?.stop() }
-        override fun onSkipToNext() { controls?.skipToNext() }
-        override fun onSkipToPrevious() { controls?.skipToPrevious() }
+        override fun onSkipToNext() = skip(PlaybackState.ACTION_SKIP_TO_NEXT, KeyEvent.KEYCODE_MEDIA_NEXT) { it.skipToNext() }
+        override fun onSkipToPrevious() =
+            skip(PlaybackState.ACTION_SKIP_TO_PREVIOUS, KeyEvent.KEYCODE_MEDIA_PREVIOUS) { it.skipToPrevious() }
+
+        /** Uses the app's own action when it offers one, otherwise a media key press like a headset. */
+        private fun skip(action: Long, keyCode: Int, viaAction: (MediaController.TransportControls) -> Unit) {
+            val controller = source ?: return
+            if ((controller.playbackState?.actions ?: 0L) and action != 0L) {
+                viaAction(controller.transportControls)
+            } else {
+                controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+            }
+        }
         override fun onSeekTo(pos: Long) { controls?.seekTo(pos) }
         override fun onFastForward() { controls?.fastForward() }
         override fun onRewind() { controls?.rewind() }
@@ -218,5 +247,9 @@ class CarMediaService : MediaBrowserService() {
             PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP or
             PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or
             PlaybackState.ACTION_SEEK_TO or PlaybackState.ACTION_FAST_FORWARD or PlaybackState.ACTION_REWIND
+
+        /** Shown in the car even if the app doesn't advertise them; presses fall back to media keys. */
+        const val ALWAYS_SHOWN_ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
+            PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
     }
 }
