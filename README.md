@@ -74,11 +74,25 @@ installed after uninstalling CarPort, and that deletes the key CarPort signs pat
   - `CARPORT_KEYSTORE_BASE64`: `base64 -w0 keystore/carport-release.p12`
   - `CARPORT_KEYSTORE_PASSWORD`: the `storePassword` from `keystore/keystore.properties`
 
-### Releasing an update
+### Versioning and releases
 
-1. Bump `versionCode` and `versionName` in `app/build.gradle.kts`.
-2. Commit, then tag and push: `git tag v<versionName> && git push origin v<versionName>`.
-3. CI publishes the release, and installed copies of CarPort offer the update.
+CarPort uses [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
+
+- **PATCH** (0.1.0 → 0.1.1): bug fixes only.
+- **MINOR** (0.1.1 → 0.2.0): new features that don't break anything.
+- **MAJOR** (0.x → 1.0.0): breaking changes, such as a new patch format or settings that don't carry over.
+
+The version lives in one place, `carport.version` in `gradle.properties`. The Android
+`versionCode` is derived from it as `MAJOR*10000 + MINOR*100 + PATCH`, so the two can't
+disagree and every release installs as an upgrade.
+
+To release:
+
+1. Set `carport.version` in `gradle.properties`.
+2. Add a `## [x.y.z] - YYYY-MM-DD` section to `CHANGELOG.md`.
+3. Commit, then tag and push: `git tag vx.y.z && git push origin vx.y.z`.
+4. CI checks that the tag matches the version, then publishes the release with the changelog
+   section as its notes. Installed copies of CarPort then offer the update.
 
 The update repository defaults to `hadapkar/myProject2-carPort`. Override it with
 `-Pcarport.updateRepo=owner/name`. It must be public, because the app checks releases without logging in.

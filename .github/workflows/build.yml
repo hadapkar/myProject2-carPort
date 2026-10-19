@@ -62,7 +62,7 @@ jobs:
       - name: Name the APK
         id: apk
         run: |
-          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          VERSION=$(grep -oP '^carport\.version=\K\S+' gradle.properties)
           cp app/build/outputs/apk/release/app-release.apk "CarPort-$VERSION.apk"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "file=CarPort-$VERSION.apk" >> "$GITHUB_OUTPUT"
@@ -83,8 +83,19 @@ jobs:
             exit 1
           fi
           TAG="${GITHUB_REF_NAME}"
-          if [ "$TAG" != "v${{ steps.apk.outputs.version }}" ]; then
-            echo "::error::Tag $TAG does not match versionName ${{ steps.apk.outputs.version }} in app/build.gradle.kts."
+          VERSION="${{ steps.apk.outputs.version }}"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Tag $TAG does not match carport.version=$VERSION in gradle.properties."
             exit 1
           fi
-          gh release create "$TAG" "${{ steps.apk.outputs.file }}" --title "CarPort ${{ steps.apk.outputs.version }}" --generate-notes
+          # Release notes = this version's section of CHANGELOG.md (up to the next "## [").
+          awk -v header="## [$VERSION]" '
+            index($0, header) == 1 { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for [$VERSION]."
+            exit 1
+          fi
+          gh release create "$TAG" "${{ steps.apk.outputs.file }}" --title "CarPort $VERSION" --notes-file release-notes.md

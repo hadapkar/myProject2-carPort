@@ -14,6 +14,17 @@ val releaseKeystore = Properties().apply {
     if (file.isFile) file.inputStream().use { load(it) }
 }
 
+// Single source of truth: carport.version in gradle.properties. versionCode is derived so the
+// two can never disagree: MAJOR * 10000 + MINOR * 100 + PATCH (0.1.0 -> 100, 1.2.3 -> 10203).
+val appVersionName: String = providers.gradleProperty("carport.version").get()
+val appVersionCode: Int = run {
+    val match = Regex("""(\d+)\.(\d+)\.(\d+)""").matchEntire(appVersionName)
+        ?: error("carport.version must be MAJOR.MINOR.PATCH, got '$appVersionName'")
+    val (major, minor, patch) = match.destructured.toList().map(String::toInt)
+    require(minor < 100 && patch < 100) { "carport.version minor and patch must be below 100" }
+    major * 10000 + minor * 100 + patch
+}
+
 android {
     namespace = "dev.hadapkar.carport"
     compileSdk = 35
@@ -23,8 +34,8 @@ android {
         // Android Auto only projects ordinary activities from Android 15 on.
         minSdk = 35
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         // Public GitHub repository whose Releases CarPort updates itself from (owner/name).
         val updateRepo = providers.gradleProperty("carport.updateRepo").getOrElse("hadapkar/myProject2-carPort")
