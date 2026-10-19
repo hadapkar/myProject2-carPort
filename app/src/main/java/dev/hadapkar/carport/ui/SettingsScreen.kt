@@ -271,7 +271,8 @@ private fun SmartPlayCard() {
     SettingsCard("Smart play button") {
         Text(
             "If you press play in the car and there's no song to resume (for example the browser tab was " +
-                "closed), CarPort opens this link in Samsung Browser instead of doing nothing. If the phone is " +
+                "closed), CarPort opens this link in Samsung Browser (or another browser if Samsung Browser " +
+                "can't) instead of doing nothing. If the phone is " +
                 "locked, the page appears after you unlock it, and the browser may need one tap to start.",
             style = MaterialTheme.typography.bodyMedium,
         )

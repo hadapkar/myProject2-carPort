@@ -10,8 +10,8 @@ in-app update card.
 
 ### Changed
 
-- The smart play button opens **Samsung Browser only**. If Samsung Browser is missing or
-  disabled, nothing is opened (the log says why) instead of using another browser.
+- The smart play button always tries **Samsung Browser first**. Another browser is used only if
+  Samsung Browser is missing, disabled or can't open the link; the log says which one opened.
 
 ## [0.2.5] - 2026-10-20
 
