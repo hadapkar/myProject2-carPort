@@ -1,0 +1,246 @@
+package dev.hadapkar.carport.media
+
+import android.content.Context
+import android.content.Intent
+import android.media.MediaMetadata
+import android.media.session.MediaController
+import android.media.session.MediaSession
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.KeyEvent
+import dev.hadapkar.carport.data.Logbook
+
+/**
+ * Mirrors the phone's playing media session (e.g. Samsung Browser playing music) into
+ * CarPort's own session, and forwards controls back to it.
+ *
+ * It runs whenever CarPort has notification access ([MediaAccessListener] starts it, and
+ * Android keeps that listener running), not only while Android Auto shows CarPort. So when
+ * music starts on the phone, CarPort's session is already "playing" with the same track:
+ * Android Auto switches to it on its own, and steering-wheel buttons reach it without the
+ * user opening CarPort. [CarMediaService] hands this session to Android Auto.
+ *
+ * Main thread only.
+ */
+object MediaMirror {
+    private val handler = Handler(Looper.getMainLooper())
+    private var appContext: Context? = null
+    private var session: MediaSession? = null
+    private var sessionManager: MediaSessionManager? = null
+    private var source: MediaController? = null
+    private var listening = false
+
+    /** Called when the mirrored app changes, so Android Auto's browse list can refresh. */
+    var onSourceChanged: (() -> Unit)? = null
+
+    fun sessionToken(context: Context): MediaSession.Token = ensureSession(context).sessionToken
+
+    private fun ensureSession(context: Context): MediaSession {
+        session?.let { return it }
+        val app = context.applicationContext
+        appContext = app
+        sessionManager = app.getSystemService(MediaSessionManager::class.java)
+        return MediaSession(app, "CarPort").apply {
+            setCallback(ForwardingCallback(), handler)
+            session = this
+            mirror()
+        }
+    }
+
+    /** Starts following the phone's media sessions; harmless to call repeatedly. */
+    fun start(context: Context) {
+        ensureSession(context)
+        if (listening) return
+        val app = appContext ?: return
+        if (!MediaAccessListener.isGranted(app)) {
+            mirror()
+            return
+        }
+        val manager = sessionManager ?: return
+        try {
+            val component = MediaAccessListener.component(app)
+            manager.addOnActiveSessionsChangedListener(sessionsListener, component, handler)
+            listening = true
+            Logbook.log("Car media: following the phone's media sessions")
+            pickSource(manager.getActiveSessions(component))
+        } catch (e: SecurityException) {
+            Logbook.log("Car media: no access to media sessions", e)
+            mirror()
+        }
+    }
+
+    /** Notification access was revoked or the listener stopped. */
+    fun stop() {
+        if (listening) {
+            runCatching { sessionManager?.removeOnActiveSessionsChangedListener(sessionsListener) }
+            listening = false
+        }
+        setSource(null)
+    }
+
+    val sourcePackage: String? get() = source?.packageName
+    val sourceTitle: String? get() = source?.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+
+    fun sourceLabel(): String? {
+        val pkg = source?.packageName ?: return null
+        val pm = appContext?.packageManager ?: return pkg
+        return runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+    }
+
+    private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
+        pickSource(controllers.orEmpty())
+    }
+
+    private val sourceCallback = object : MediaController.Callback() {
+        override fun onMetadataChanged(metadata: MediaMetadata?) = mirror()
+        override fun onPlaybackStateChanged(state: PlaybackState?) {
+            mirror()
+            // Another app may have started playing; prefer whichever is playing now.
+            refreshSessions()
+        }
+        override fun onSessionDestroyed() {
+            setSource(null)
+            refreshSessions()
+        }
+    }
+
+    private fun refreshSessions() {
+        val app = appContext ?: return
+        if (!listening) return
+        runCatching { pickSource(sessionManager?.getActiveSessions(MediaAccessListener.component(app)).orEmpty()) }
+    }
+
+    /** Prefers a playing session; otherwise keeps the current one or takes the most recent. */
+    private fun pickSource(controllers: List<MediaController>) {
+        val own = appContext?.packageName
+        val candidates = controllers.filter { it.packageName != own }
+        val playing = candidates.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+        val current = source?.let { cur -> candidates.firstOrNull { it.sessionToken == cur.sessionToken } }
+        setSource(playing ?: current ?: candidates.firstOrNull())
+    }
+
+    private fun setSource(controller: MediaController?) {
+        if (controller?.sessionToken == source?.sessionToken) {
+            mirror()
+            return
+        }
+        source?.unregisterCallback(sourceCallback)
+        source = controller
+        controller?.registerCallback(sourceCallback, handler)
+        Logbook.log("Car media: mirroring ${controller?.packageName ?: "nothing"}")
+        mirror()
+        onSourceChanged?.invoke()
+    }
+
+    /** Copies the source's metadata and playback state into CarPort's session. */
+    private fun mirror() {
+        val session = session ?: return
+        val app = appContext ?: return
+        val controller = source
+        if (controller == null) {
+            session.setMetadata(
+                MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, "Nothing is playing")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, "Start music on your phone, e.g. in Samsung Browser")
+                    .build()
+            )
+            session.setPlaybackState(
+                PlaybackState.Builder().setActions(0).apply {
+                    if (MediaAccessListener.isGranted(app)) {
+                        setState(PlaybackState.STATE_NONE, 0, 0f)
+                    } else {
+                        setState(PlaybackState.STATE_ERROR, 0, 0f)
+                        setErrorMessage("Open CarPort on your phone and allow notification access for car media controls.")
+                    }
+                }.build()
+            )
+            // Don't claim media buttons or Android Auto's attention when nothing is playing.
+            session.isActive = false
+            return
+        }
+
+        val metadata = controller.metadata
+        session.setMetadata(
+            MediaMetadata.Builder(metadata ?: MediaMetadata.Builder().build()).apply {
+                if (metadata?.getString(MediaMetadata.METADATA_KEY_TITLE).isNullOrBlank()) {
+                    putString(MediaMetadata.METADATA_KEY_TITLE, "Playing")
+                }
+                if (metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST).isNullOrBlank()) {
+                    putString(MediaMetadata.METADATA_KEY_ARTIST, sourceLabel())
+                }
+            }.build()
+        )
+        val sourceState = controller.playbackState
+        session.setPlaybackState(
+            if (sourceState != null) {
+                PlaybackState.Builder(sourceState)
+                    .setActions(
+                        sourceState.actions and FORWARDED_ACTIONS or ALWAYS_SHOWN_ACTIONS or
+                            PlaybackState.ACTION_PLAY_FROM_MEDIA_ID or PlaybackState.ACTION_PLAY_FROM_SEARCH
+                    )
+                    .build()
+            } else {
+                PlaybackState.Builder().setState(PlaybackState.STATE_NONE, 0, 0f).build()
+            }
+        )
+        session.isActive = true
+    }
+
+    /** Sends the car's button presses to the app that is actually playing. */
+    private class ForwardingCallback : MediaSession.Callback() {
+        private val controls get() = source?.transportControls
+
+        /**
+         * Steering-wheel and headset buttons: pass the raw key press to the playing app, exactly
+         * as if a Bluetooth headset sent it, so the app decides (e.g. a website's next track).
+         */
+        override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+            val event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+            val controller = source
+            if (event != null && controller != null && controller.dispatchMediaButtonEvent(event)) {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    Logbook.log("Car media: forwarded key ${event.keyCode} to ${controller.packageName}")
+                }
+                return true
+            }
+            return super.onMediaButtonEvent(mediaButtonIntent)
+        }
+
+        override fun onPlay() { controls?.play() }
+        override fun onPause() { controls?.pause() }
+        override fun onStop() { controls?.stop() }
+        override fun onSkipToNext() = skip(PlaybackState.ACTION_SKIP_TO_NEXT, KeyEvent.KEYCODE_MEDIA_NEXT) { it.skipToNext() }
+        override fun onSkipToPrevious() =
+            skip(PlaybackState.ACTION_SKIP_TO_PREVIOUS, KeyEvent.KEYCODE_MEDIA_PREVIOUS) { it.skipToPrevious() }
+        override fun onSeekTo(pos: Long) { controls?.seekTo(pos) }
+        override fun onFastForward() { controls?.fastForward() }
+        override fun onRewind() { controls?.rewind() }
+        override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) { controls?.play() }
+        // "Hey Google, play …" in the car: resume whatever the phone was playing.
+        override fun onPlayFromSearch(query: String?, extras: Bundle?) { controls?.play() }
+        override fun onCustomAction(action: String, extras: Bundle?) { controls?.sendCustomAction(action, extras) }
+
+        /** Uses the app's own action when it offers one, otherwise a media key press like a headset. */
+        private fun skip(action: Long, keyCode: Int, viaAction: (MediaController.TransportControls) -> Unit) {
+            val controller = source ?: return
+            if ((controller.playbackState?.actions ?: 0L) and action != 0L) {
+                viaAction(controller.transportControls)
+            } else {
+                controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+                controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+            }
+        }
+    }
+
+    private const val FORWARDED_ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
+        PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP or
+        PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+        PlaybackState.ACTION_SEEK_TO or PlaybackState.ACTION_FAST_FORWARD or PlaybackState.ACTION_REWIND
+
+    /** Shown in the car even if the app doesn't advertise them; presses fall back to media keys. */
+    private const val ALWAYS_SHOWN_ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or
+        PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
+}

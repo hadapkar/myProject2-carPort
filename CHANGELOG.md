@@ -6,6 +6,15 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.2] - 2026-10-20
+
+### Improved
+
+- **No need to open CarPort in the car.** Car media controls now run in the background
+  whenever notification access is on. When music starts on the phone (for example in Samsung
+  Browser), CarPort is already showing it as playing, so Android Auto can switch to it by
+  itself and the steering-wheel buttons pause and change songs straight away.
+
 ## [0.2.1] - 2026-10-20
 
 ### Improved
