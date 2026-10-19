@@ -6,6 +6,14 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.3.1] - 2026-10-20
+
+### Added
+
+- "Test without a car" can now check the new features: **Car connects** and **Car disconnects**
+  buttons run the real resume and pause logic (with your settings), and a button sends the same
+  request as tapping the car's **"Open my music link"** tile.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added

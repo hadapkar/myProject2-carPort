@@ -55,8 +55,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hadapkar.carport.data.Logbook
+import dev.hadapkar.carport.data.SettingsStore
 import dev.hadapkar.carport.media.MediaAccessListener
 import dev.hadapkar.carport.media.MediaMirror
+import dev.hadapkar.carport.media.SmartPlay
 
 /**
  * Tests car media controls on the phone alone. The mirror runs as if the phone were in the
@@ -149,6 +151,40 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
                 OutlinedButton(onClick = { pressKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS, "previous") }, modifier = Modifier.weight(1f)) { Text("⏮") }
                 OutlinedButton(onClick = { pressKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, "play/pause") }, modifier = Modifier.weight(1f)) { Text("⏯") }
                 OutlinedButton(onClick = { pressKey(KeyEvent.KEYCODE_MEDIA_NEXT, "next") }, modifier = Modifier.weight(1f)) { Text("⏭") }
+            }
+
+            Text("Car connection", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            val store = remember { SettingsStore(context) }
+            Text(
+                "Resume when the car connects: ${if (store.resumeOnConnect) "on" else "off"} · " +
+                    "Pause when the car disconnects: ${if (store.pauseOnDisconnect) "on" else "off"} (change in Settings)",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { lastAction = "Car connects: " + MediaMirror.simulateCarConnection(context, connected = true) },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Car connects") }
+                OutlinedButton(
+                    onClick = { lastAction = "Car disconnects: " + MediaMirror.simulateCarConnection(context, connected = false) },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Car disconnects") }
+            }
+
+            Text("Car browse screen", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            if (SmartPlay.hasLink(context)) {
+                OutlinedButton(onClick = {
+                    // Exactly what tapping the tile in the car sends.
+                    car.transportControls.playFromMediaId(MediaMirror.OPEN_LINK_MEDIA_ID, null)
+                    lastAction = "Car: tapped \"Open my music link\""
+                }) { Text("Tap \"Open my music link\" tile") }
+            } else {
+                Text(
+                    "Save a music link in Settings › Smart play button to get the \"Open my music link\" tile.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             lastAction?.let {

@@ -77,9 +77,30 @@ object MediaMirror {
         }
     }
 
+    /**
+     * The test screen's "car connects / disconnects" buttons: run the same resume and pause
+     * logic as a real connection change, honouring the same settings, without touching the
+     * real connection state. Returns what happened, for the screen.
+     */
+    fun simulateCarConnection(context: Context, connected: Boolean): String {
+        val settings = SettingsStore(context)
+        Logbook.log("Car media: simulated car ${if (connected) "connect" else "disconnect"}")
+        return if (connected) {
+            if (!settings.resumeOnConnect) {
+                "Resume when the car connects is off, so nothing happens"
+            } else {
+                scheduleResume()
+                "Will resume a paused song in 2 seconds"
+            }
+        } else {
+            if (!settings.pauseOnDisconnect) "Pause when the car disconnects is off, so nothing happens"
+            else if (pauseForDisconnect()) "Paused the music" else "Nothing was playing"
+        }
+    }
+
     private val resumeRunnable = Runnable {
         val controller = source ?: return@Runnable
-        if (carConnected && controller.playbackState?.state == PlaybackState.STATE_PAUSED) {
+        if ((carConnected || testMode) && controller.playbackState?.state == PlaybackState.STATE_PAUSED) {
             Logbook.log("Car media: resuming ${controller.packageName} after connecting")
             controller.transportControls.play()
         }
@@ -91,13 +112,14 @@ object MediaMirror {
         handler.postDelayed(resumeRunnable, RESUME_DELAY_MS)
     }
 
-    private fun pauseForDisconnect() {
+    /** Returns true when something was playing and got paused. */
+    private fun pauseForDisconnect(): Boolean {
         handler.removeCallbacks(resumeRunnable)
-        val controller = source ?: return
-        if (controller.playbackState?.state == PlaybackState.STATE_PLAYING) {
-            Logbook.log("Car media: pausing ${controller.packageName} because the car disconnected")
-            controller.transportControls.pause()
-        }
+        val controller = source ?: return false
+        if (controller.playbackState?.state != PlaybackState.STATE_PLAYING) return false
+        Logbook.log("Car media: pausing ${controller.packageName} because the car disconnected")
+        controller.transportControls.pause()
+        return true
     }
 
     private const val RESUME_DELAY_MS = 2_000L
