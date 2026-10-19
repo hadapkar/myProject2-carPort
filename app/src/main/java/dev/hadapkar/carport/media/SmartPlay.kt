@@ -13,7 +13,8 @@ import dev.hadapkar.carport.data.SettingsStore
 /**
  * Smart play button: when play is pressed in the car and there is no song to resume (the
  * browser tab was closed or Android stopped the browser), open the user's saved music link in
- * Samsung Browser instead of doing nothing.
+ * Samsung Browser instead of doing nothing. Only Samsung Browser is used: if it's missing or
+ * disabled, nothing is opened.
  *
  * Android only lets a background app open a screen when the user granted it "Display over
  * other apps", so this needs that permission. A locked phone shows the page after unlocking,
@@ -44,22 +45,25 @@ object SmartPlay {
             Logbook.log("Smart play: 'Display over other apps' is not allowed, so the browser can't be opened")
             return false
         }
+        if (!InstalledApps.isInstalled(context, SAMSUNG_BROWSER)) {
+            Logbook.log("Smart play: Samsung Browser is not installed, so nothing was opened")
+            return false
+        }
         val now = SystemClock.elapsedRealtime()
         if (now - lastOpened < MIN_INTERVAL_MS) return true // Already opening; don't stack tabs.
         lastOpened = now
 
-        val view = Intent(Intent.ACTION_VIEW, Uri.parse(link.trim())).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (InstalledApps.isInstalled(context, SAMSUNG_BROWSER)) view.setPackage(SAMSUNG_BROWSER)
+        // Samsung Browser only, never another browser.
+        val view = Intent(Intent.ACTION_VIEW, Uri.parse(link.trim()))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .setPackage(SAMSUNG_BROWSER)
         return try {
             context.startActivity(view)
-            Logbook.log("Smart play: opened $link in ${view.`package` ?: "the default browser"}")
+            Logbook.log("Smart play: opened $link in Samsung Browser")
             true
         } catch (e: ActivityNotFoundException) {
-            // Samsung Browser missing or disabled: fall back to the default browser.
-            runCatching { context.startActivity(view.setPackage(null)) }
-                .onSuccess { Logbook.log("Smart play: opened $link in the default browser") }
-                .onFailure { Logbook.log("Smart play: no browser could open $link", it) }
-                .isSuccess
+            Logbook.log("Smart play: Samsung Browser is disabled or can't open $link, so nothing was opened")
+            false
         } catch (e: RuntimeException) {
             Logbook.log("Smart play: Android blocked opening the browser", e)
             false

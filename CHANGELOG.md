@@ -6,6 +6,13 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.6] - 2026-10-20
+
+### Changed
+
+- The smart play button opens **Samsung Browser only**. If Samsung Browser is missing or
+  disabled, nothing is opened (the log says why) instead of using another browser.
+
 ## [0.2.5] - 2026-10-20
 
 ### Added
