@@ -21,16 +21,31 @@ class SettingsStore(context: Context) {
             putBoolean(KEY_ALL_LAUNCHER_ENTRIES, value.allLauncherEntries)
         }
 
+    /**
+     * Smart play button: when play is pressed in the car and nothing can be resumed, open
+     * [smartPlayUrl] (for example a YouTube Music playlist) in Samsung Browser.
+     */
+    var smartPlayEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SMART_PLAY_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_SMART_PLAY_ENABLED, value) }
+
+    var smartPlayUrl: String
+        get() = prefs.getString(KEY_SMART_PLAY_URL, null) ?: DEFAULT_SMART_PLAY_URL
+        set(value) = prefs.edit { putString(KEY_SMART_PLAY_URL, value.trim()) }
+
     /** Fingerprint of the key the user last exported; a mismatch means "not backed up". */
     var backedUpKeySha256: String?
         get() = prefs.getString(KEY_BACKED_UP_KEY, null)
         set(value) = prefs.edit { putString(KEY_BACKED_UP_KEY, value) }
 
-    private companion object {
-        const val KEY_UNLOCK_ORIENTATION = "unlock_orientation"
-        const val KEY_FORCE_RESIZEABLE = "force_resizeable"
-        const val KEY_KEEP_STATE = "keep_state_on_screen_change"
-        const val KEY_ALL_LAUNCHER_ENTRIES = "all_launcher_entries"
-        const val KEY_BACKED_UP_KEY = "backed_up_key_sha256"
+    companion object {
+        const val DEFAULT_SMART_PLAY_URL = "https://music.youtube.com/"
+        private const val KEY_SMART_PLAY_ENABLED = "smart_play_enabled"
+        private const val KEY_SMART_PLAY_URL = "smart_play_url"
+        private const val KEY_UNLOCK_ORIENTATION = "unlock_orientation"
+        private const val KEY_FORCE_RESIZEABLE = "force_resizeable"
+        private const val KEY_KEEP_STATE = "keep_state_on_screen_change"
+        private const val KEY_ALL_LAUNCHER_ENTRIES = "all_launcher_entries"
+        private const val KEY_BACKED_UP_KEY = "backed_up_key_sha256"
     }
 }

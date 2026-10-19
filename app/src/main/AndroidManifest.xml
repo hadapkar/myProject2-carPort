@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Only for checking and downloading CarPort updates from GitHub Releases. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Optional, user-granted: Android's exception that lets the smart play button open your
+         music link in Samsung Browser from the background. Nothing is drawn over other apps. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".CarPortApplication"

@@ -30,6 +30,11 @@ internal fun openMediaAccess(context: Context) {
     }
 }
 
+/** The "Display over other apps" page for CarPort (lets the smart play button open the browser). */
+internal fun openOverlayPermission(context: Context) {
+    startOrToast(context, Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+}
+
 /** CarPort's App info page, where Android 15 hides "Allow restricted settings" (⋮ menu). */
 internal fun openCarPortAppInfo(context: Context) {
     startOrToast(context, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))

@@ -15,6 +15,7 @@ import android.os.Looper
 import android.view.KeyEvent
 import dev.hadapkar.carport.MainActivity
 import dev.hadapkar.carport.data.Logbook
+import dev.hadapkar.carport.data.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -132,6 +133,9 @@ object MediaMirror {
         }
     }
 
+    /** Settings changed (e.g. smart play turned on or off): refresh what the car shows. */
+    fun refresh() = mirror()
+
     /** Stops following media sessions (car disconnected, test screen closed, or access revoked). */
     fun stop() {
         if (listening) {
@@ -226,10 +230,12 @@ object MediaMirror {
                     .putString(MediaMetadata.METADATA_KEY_ARTIST, "Start music on your phone, e.g. in Samsung Browser")
                     .build()
             )
+            val smartPlay = SettingsStore(app).smartPlayEnabled
             session.setPlaybackState(
-                PlaybackState.Builder().setActions(0).apply {
+                // With smart play on, keep a play button so pressing it can open the saved link.
+                PlaybackState.Builder().setActions(if (smartPlay) SMART_PLAY_ACTIONS else 0).apply {
                     if (MediaAccessListener.isGranted(app)) {
-                        setState(PlaybackState.STATE_NONE, 0, 0f)
+                        setState(if (smartPlay) PlaybackState.STATE_STOPPED else PlaybackState.STATE_NONE, 0, 0f)
                     } else {
                         setState(PlaybackState.STATE_ERROR, 0, 0f)
                         setErrorMessage("Open CarPort on your phone and allow notification access for car media controls.")
@@ -305,6 +311,13 @@ object MediaMirror {
         override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
             val event = mediaButtonIntent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
             val controller = source
+            if (controller == null && event != null &&
+                (event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+            ) {
+                // Nothing to resume: the smart play button may open the saved music link.
+                if (event.action == KeyEvent.ACTION_DOWN) playOrOpenLink()
+                return true
+            }
             if (event != null && controller != null && controller.dispatchMediaButtonEvent(event)) {
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     Logbook.log("Car media: forwarded key ${event.keyCode} to ${controller.packageName}")
@@ -314,7 +327,7 @@ object MediaMirror {
             return super.onMediaButtonEvent(mediaButtonIntent)
         }
 
-        override fun onPlay() { controls?.play() }
+        override fun onPlay() = playOrOpenLink()
         override fun onPause() { controls?.pause() }
         override fun onStop() { controls?.stop() }
         override fun onSkipToNext() = skip(PlaybackState.ACTION_SKIP_TO_NEXT, KeyEvent.KEYCODE_MEDIA_NEXT) { it.skipToNext() }
@@ -323,9 +336,24 @@ object MediaMirror {
         override fun onSeekTo(pos: Long) { controls?.seekTo(pos) }
         override fun onFastForward() { controls?.fastForward() }
         override fun onRewind() { controls?.rewind() }
-        override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) { controls?.play() }
+        override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) = playOrOpenLink()
         // "Hey Google, play …" in the car: resume whatever the phone was playing.
-        override fun onPlayFromSearch(query: String?, extras: Bundle?) { controls?.play() }
+        override fun onPlayFromSearch(query: String?, extras: Bundle?) = playOrOpenLink()
+
+        /** Resumes the playing app, or, with nothing to resume, opens the smart play link. */
+        private fun playOrOpenLink() {
+            val controller = source
+            if (controller != null) {
+                controller.transportControls.play()
+                return
+            }
+            val app = appContext ?: return
+            if (SmartPlay.openIfEnabled(app)) {
+                _preview.value = _preview.value.copy(state = "Opened your music link in the browser")
+            } else {
+                Logbook.log("Car media: play pressed, but nothing is playing and smart play didn't open anything")
+            }
+        }
         override fun onCustomAction(action: String, extras: Bundle?) { controls?.sendCustomAction(action, extras) }
 
         /** Uses the app's own action when it offers one, otherwise a media key press like a headset. */
@@ -344,6 +372,9 @@ object MediaMirror {
         PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP or
         PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or
         PlaybackState.ACTION_SEEK_TO or PlaybackState.ACTION_FAST_FORWARD or PlaybackState.ACTION_REWIND
+
+    private const val SMART_PLAY_ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_PAUSE or
+        PlaybackState.ACTION_PLAY_FROM_MEDIA_ID or PlaybackState.ACTION_PLAY_FROM_SEARCH
 
     /** Shown in the car even if the app doesn't advertise them; presses fall back to media keys. */
     private const val ALWAYS_SHOWN_ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or

@@ -6,6 +6,16 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.5] - 2026-10-20
+
+### Added
+
+- **Smart play button** (Settings, off by default). When you press play in the car (steering
+  wheel, car screen or "Hey Google, play") and there's no song to resume, CarPort opens your
+  saved music link in Samsung Browser instead of doing nothing. The link is editable, for
+  example a YouTube Music playlist. Needs "Display over other apps"; a locked phone shows the
+  page after unlocking, and the browser may need one tap to start.
+
 ## [0.2.4] - 2026-10-20
 
 ### Added

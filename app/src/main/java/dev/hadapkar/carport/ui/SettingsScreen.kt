@@ -43,7 +43,16 @@ import androidx.compose.ui.unit.dp
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.hadapkar.carport.data.Logbook
+import dev.hadapkar.carport.data.SettingsStore
+import dev.hadapkar.carport.media.MediaMirror
+import dev.hadapkar.carport.media.SmartPlay
 import dev.hadapkar.carport.update.UpdateChecker
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -124,6 +133,8 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 )
                 OutlinedButton(onClick = onTestMedia) { Text("Test without a car") }
             }
+
+            SmartPlayCard()
 
             SettingsCard("Repair") {
                 Text(
@@ -239,6 +250,79 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
             },
             dismissButton = { TextButton(onClick = { confirmImport = false }) { Text("Cancel") } },
         )
+    }
+}
+
+/** Smart play button: open a saved music link when play is pressed and nothing can be resumed. */
+@Composable
+private fun SmartPlayCard() {
+    val context = LocalContext.current
+    val store = remember { SettingsStore(context) }
+    var enabled by remember { mutableStateOf(store.smartPlayEnabled) }
+    var link by remember { mutableStateOf(store.smartPlayUrl) }
+    var canOpen by remember { mutableStateOf(SmartPlay.canOpenFromBackground(context)) }
+    // The permission is granted on a system screen; re-check when the user comes back.
+    LifecycleResumeEffect(Unit) {
+        canOpen = SmartPlay.canOpenFromBackground(context)
+        onPauseOrDispose { }
+    }
+    val linkValid = SmartPlay.isValidLink(link)
+
+    SettingsCard("Smart play button") {
+        Text(
+            "If you press play in the car and there's no song to resume (for example the browser tab was " +
+                "closed), CarPort opens this link in Samsung Browser instead of doing nothing. If the phone is " +
+                "locked, the page appears after you unlock it, and the browser may need one tap to start.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        SwitchItem(
+            title = "Open my music link when nothing is playing",
+            body = "Works with the steering wheel, the car's play button and \"Hey Google, play\".",
+            checked = enabled,
+            onCheckedChange = {
+                enabled = it
+                store.smartPlayEnabled = it
+                MediaMirror.refresh()
+            },
+        )
+        OutlinedTextField(
+            value = link,
+            onValueChange = {
+                link = it
+                if (SmartPlay.isValidLink(it)) store.smartPlayUrl = it
+            },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Music link") },
+            placeholder = { Text("https://music.youtube.com/playlist?list=…") },
+            singleLine = true,
+            isError = !linkValid,
+            supportingText = {
+                Text(
+                    if (linkValid) "Paste a YouTube Music playlist, album or song link, or any web address."
+                    else "Enter a web address starting with https://"
+                )
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+        )
+        TextButton(onClick = {
+            link = SettingsStore.DEFAULT_SMART_PLAY_URL
+            store.smartPlayUrl = link
+        }) { Text("Use YouTube Music home") }
+        if (canOpen) {
+            Text(
+                "✓ Display over other apps is allowed",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else {
+            Text(
+                "Android only lets CarPort open the browser from the background with \"Display over other " +
+                    "apps\". CarPort never draws over other apps.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            Button(onClick = { openOverlayPermission(context) }) { Text("Allow display over other apps") }
+        }
     }
 }
 
