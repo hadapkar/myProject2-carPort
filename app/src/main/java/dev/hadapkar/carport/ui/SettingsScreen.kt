@@ -40,7 +40,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.hadapkar.carport.data.Logbook
 import dev.hadapkar.carport.update.UpdateChecker
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -49,6 +52,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
     val options by viewModel.options.collectAsStateWithLifecycle()
     val keyInfo by viewModel.keyInfo.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var confirmImport by rememberSaveable { mutableStateOf(false) }
 
     val exportKey = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-pkcs12")) { uri ->
@@ -94,7 +98,30 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                     checked = options.forceResizeable,
                     onCheckedChange = { viewModel.setOptions(options.copy(forceResizeable = it)) },
                 )
-                Hint("Changes apply the next time you patch an app.")
+                SwitchItem(
+                    title = "Keep page open when switching screens",
+                    body = "The app keeps its page or video when it moves between the phone and the car " +
+                        "screen. Some apps may draw the wrong layout; if so, turn this off and patch again.",
+                    checked = options.keepStateOnScreenChange,
+                    onCheckedChange = { viewModel.setOptions(options.copy(keepStateOnScreenChange = it)) },
+                )
+                SwitchItem(
+                    title = "Show every launcher icon in the car",
+                    body = "Off: one car icon per app (the icon your phone shows). On: every launcher entry, " +
+                        "including alternate icons.",
+                    checked = options.allLauncherEntries,
+                    onCheckedChange = { viewModel.setOptions(options.copy(allLauncherEntries = it)) },
+                )
+                Hint("Changes apply the next time you patch an app. Turning an option off and patching again undoes it.")
+            }
+
+            SettingsCard("Repair") {
+                Text(
+                    "If patched apps stop opening after an Android or Android Auto update, patch them all again " +
+                        "in place. Their data is kept.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = viewModel::repairAll) { Text("Repair all patched apps") }
             }
 
             SettingsCard("Signing key") {
@@ -157,6 +184,18 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedButton(onClick = onOpenSetup) { Text("Open setup guide") }
+                Text(
+                    "Something went wrong? Share the diagnostic log. It lists what CarPort did and any errors, " +
+                        "with no personal data beyond app names.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { shareLog(context) }) { Text("Share log") }
+                    TextButton(onClick = {
+                        Logbook.clear()
+                        Toast.makeText(context, "Log cleared", Toast.LENGTH_SHORT).show()
+                    }) { Text("Clear log") }
+                }
             }
 
             SettingsCard("Safety") {

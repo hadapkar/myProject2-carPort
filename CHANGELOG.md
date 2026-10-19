@@ -6,6 +6,28 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.2.0] - 2026-10-20
+
+### Added
+
+- **Car media controls.** CarPort appears in Android Auto as a media app showing whatever is
+  playing on your phone (for example music in Samsung Browser), with artwork, play/pause,
+  next/previous and seeking, even with the phone locked. Needs notification access once; the
+  setup guide shows how.
+- **Repair all** re-patches every patched app in place after Android or Android Auto updates.
+- Option: **keep page open when switching screens** (off by default).
+- Option: **show every launcher icon in the car** (off by default).
+- The success message lists what was changed, and a **diagnostic log** can be shared from
+  Settings or from any error message.
+
+### Fixed
+
+- **Patched apps now appear in Android Auto's app list.** They're declared in the game
+  category, which Android Auto requires for listing sideloaded ordinary apps (as AA Browser
+  does). Re-patch apps patched with an older CarPort.
+- Apps with alternate icons get one car icon instead of one per icon (Firefox: 1 instead of 24).
+- Turning a display option off and patching again now restores the app's original setting.
+
 ## [0.1.1] - 2026-10-19
 
 ### Fixed

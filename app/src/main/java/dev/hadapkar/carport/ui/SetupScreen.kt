@@ -75,7 +75,7 @@ fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Three steps, once. After that, patching an app takes one tap.",
+                "A few steps, once. After that, patching an app takes one tap.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -104,6 +104,28 @@ fun SetupScreen(viewModel: MainViewModel, onDone: () -> Unit) {
 
             StepCard(
                 number = 3,
+                done = setup.mediaAccessGranted,
+                title = "Car media controls",
+                body = "Shows music playing on your phone (for example in Samsung Browser) in Android Auto, " +
+                    "with play/pause and next/previous, even with the phone locked. Open CarPort in the car's " +
+                    "app list to see it.\n\n" +
+                    "Android only lets CarPort see what's playing with notification access:\n" +
+                    "1. Tap Allow restricted settings: on CarPort's App info, tap ⋮ (top right) › Allow " +
+                    "restricted settings. (Needed because CarPort was installed from a download.)\n" +
+                    "2. Tap Allow access and turn on CarPort car media controls.\n\n" +
+                    "CarPort never reads your notifications.",
+                action = null,
+                onAction = {},
+            )
+            if (!setup.mediaAccessGranted) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(onClick = { openCarPortAppInfo(context) }) { Text("Allow restricted settings") }
+                    FilledTonalButton(onClick = { openMediaAccess(context) }) { Text("Allow access") }
+                }
+            }
+
+            StepCard(
+                number = 4,
                 done = keyInfo?.backedUp == true,
                 title = "Back up your signing key",
                 body = "Patched apps are signed with a key that lives in CarPort. Keep a copy so you can " +

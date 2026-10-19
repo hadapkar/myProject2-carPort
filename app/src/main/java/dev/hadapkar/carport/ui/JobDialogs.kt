@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 
@@ -95,8 +96,14 @@ fun JobDialogs(
                 }
             },
             dismissButton = {
-                if (job.canRetry) {
-                    TextButton(onClick = onDismiss) { Text("Close") }
+                Row {
+                    if (!job.success) {
+                        val context = LocalContext.current
+                        TextButton(onClick = { shareLog(context) }) { Text("Share log") }
+                    }
+                    if (job.canRetry) {
+                        TextButton(onClick = onDismiss) { Text("Close") }
+                    }
                 }
             },
         )

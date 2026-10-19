@@ -166,6 +166,17 @@ fun AppsScreen(viewModel: MainViewModel, onOpenSetup: () -> Unit, onOpenSettings
                         )
                     }
                 }
+                if (setup.canInstallApps && !setup.mediaAccessGranted) {
+                    item {
+                        NoticeCard(
+                            title = "Turn on car media controls",
+                            body = "Control music playing on your phone (for example in Samsung Browser) from " +
+                                "Android Auto, even with the phone locked.",
+                            action = "Set up",
+                            onAction = onOpenSetup,
+                        )
+                    }
+                }
                 if (list.any { it.signedByCarPort } && keyInfo?.backedUp == false) {
                     item {
                         NoticeCard(

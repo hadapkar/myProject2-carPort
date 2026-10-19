@@ -9,11 +9,13 @@ import androidx.lifecycle.viewModelScope
 import dev.hadapkar.carport.data.AppEntry
 import dev.hadapkar.carport.data.InstalledApps
 import dev.hadapkar.carport.data.KeyRepository
+import dev.hadapkar.carport.data.Logbook
 import dev.hadapkar.carport.data.SettingsStore
 import dev.hadapkar.carport.data.SignerState
 import dev.hadapkar.carport.install.InstallEvent
 import dev.hadapkar.carport.install.InstallEvents
 import dev.hadapkar.carport.install.Installer
+import dev.hadapkar.carport.media.MediaAccessListener
 import dev.hadapkar.carport.patcher.ApkPatcher
 import dev.hadapkar.carport.patcher.PatchException
 import dev.hadapkar.carport.patcher.PatchOptions
@@ -62,6 +64,8 @@ sealed interface JobState {
 data class SetupStatus(
     val canInstallApps: Boolean = false,
     val androidAutoInstalled: Boolean = false,
+    /** Notification access, needed for car media controls. */
+    val mediaAccessGranted: Boolean = false,
 )
 
 data class KeyInfo(val sha256: String, val backedUp: Boolean)
@@ -163,6 +167,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _setup.value = SetupStatus(
             canInstallApps = context.packageManager.canRequestPackageInstalls(),
             androidAutoInstalled = InstalledApps.isInstalled(context, InstalledApps.ANDROID_AUTO_PACKAGE),
+            mediaAccessGranted = MediaAccessListener.isGranted(context),
         )
         refreshJob?.cancel()
         _refreshing.value = userInitiated
@@ -201,14 +206,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---- Patching ----
 
-    fun patchInstalledApp(app: AppEntry) {
-        startJob(app.label) { _ ->
+    fun patchInstalledApp(app: AppEntry) = patchInstalledApp(app, app.label)
+
+    private fun patchInstalledApp(app: AppEntry, label: String) {
+        // An in-place re-patch keeps the launcher icon currently in use (e.g. an alternate icon).
+        // A first patch reinstalls the app, which resets icons to the manifest defaults.
+        val preferred = if (app.signedByCarPort) {
+            runCatching { InstalledApps.enabledLauncherComponents(context, app.packageName) }.getOrDefault(emptySet())
+        } else {
+            emptySet()
+        }
+        startJob(label, _options.value.copy(preferredLauncherComponents = preferred)) { _ ->
             File(app.sourceDir) to app.splitSourceDirs.map(::File)
         }
     }
 
     fun patchApkFile(uri: Uri) {
-        startJob(FILE_LABEL) { workDir ->
+        startJob(FILE_LABEL, _options.value) { workDir ->
             val target = File(workDir, "input.apk")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 target.outputStream().use { input.copyTo(it, 1 shl 16) }
@@ -217,30 +231,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun startJob(label: String, prepare: (workDir: File) -> Pair<File, List<File>>) {
+    private fun startJob(label: String, options: PatchOptions, prepare: (workDir: File) -> Pair<File, List<File>>) {
         if (_job.value != JobState.Idle) return
         retry = null
         unresolvedUninstall = null
         _job.value = JobState.Working(label, "Preparing")
+        Logbook.log("Patch $label with $options")
         viewModelScope.launch {
             try {
                 val result = withContext(patchFiles) {
                     val root = File(context.filesDir, PATCH_DIR).apply { deleteRecursively() }
                     val importDir = File(root, "import").apply { mkdirs() }
                     val (base, splits) = prepare(importDir)
+                    Logbook.log("Input ${base.length() / 1024} KB + ${splits.size} split(s); heap limit ${Runtime.getRuntime().maxMemory() / (1024 * 1024)} MB")
                     ApkPatcher(keys.key()).patch(
                         base = base,
                         splits = splits,
                         outputDir = File(root, "out"),
-                        options = _options.value,
+                        options = options,
                     ) { step -> _job.value = JobState.Working(label, step) }
                 }
+                Logbook.log("Patched ${result.packageName} ${result.versionName}: ${result.changes}")
                 val displayLabel = if (label == FILE_LABEL) result.packageName else label
                 val sha = withContext(Dispatchers.IO) { keys.key().sha256 }
                 when (InstalledApps.signerState(context, result.packageName, sha)) {
                     SignerState.NOT_INSTALLED, SignerState.CARPORT_KEY ->
                         installPatched(displayLabel, result, originalRemoved = false)
-                    SignerState.OTHER_KEY -> _job.value = JobState.ConfirmUninstall(displayLabel, result)
+                    SignerState.OTHER_KEY ->
+                        if (batch != null) {
+                            // Repair all only updates in place; it never uninstalls anything.
+                            finishAndClean("Couldn't repair $displayLabel", "It is no longer signed with this CarPort's key.")
+                        } else {
+                            _job.value = JobState.ConfirmUninstall(displayLabel, result)
+                        }
                     SignerState.OTHER_PROFILE -> finishAndClean(
                         "Can't replace $displayLabel",
                         "$displayLabel is also installed in another profile (work, cloned or private space). " +
@@ -256,9 +279,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
+                Logbook.log("Patch $label failed", e)
                 finishAndClean("Couldn't patch $label", e.userMessage())
             }
         }
+    }
+
+    // ---- Repair all ----
+
+    private class Batch(val queue: ArrayDeque<AppEntry>, val total: Int) {
+        var current: String = ""
+        val repaired = mutableListOf<String>()
+        val failed = mutableListOf<String>()
+    }
+
+    private var batch: Batch? = null
+
+    /**
+     * Re-patches every app signed with this CarPort's key, in place (their data is kept), for
+     * example after an Android or Android Auto update stopped them from opening.
+     */
+    fun repairAll() {
+        if (_job.value != JobState.Idle) return
+        val targets = _apps.value.orEmpty().filter { it.signedByCarPort }
+        if (targets.isEmpty()) {
+            _job.value = JobState.Finished(true, "Nothing to repair", "No app is patched with this CarPort's key yet.")
+            return
+        }
+        Logbook.log("Repair all: ${targets.joinToString { it.packageName }}")
+        batch = Batch(ArrayDeque(targets), targets.size)
+        nextInBatch()
+    }
+
+    private fun nextInBatch() {
+        val run = batch ?: return
+        val app = run.queue.removeFirstOrNull()
+        if (app == null) {
+            batch = null
+            Logbook.log("Repair all done: ${run.repaired.size} repaired, ${run.failed.size} failed")
+            _job.value = JobState.Finished(
+                run.failed.isEmpty(),
+                "Repaired ${run.repaired.size} of ${run.total} apps",
+                if (run.failed.isEmpty()) "All patched apps were refreshed in place. Their data is kept."
+                else "These were not repaired (they still work as before):\n\n" + run.failed.joinToString("\n\n"),
+            )
+            refresh()
+            return
+        }
+        run.current = app.label
+        _job.value = JobState.Idle
+        patchInstalledApp(app, "${app.label} (${run.total - run.queue.size} of ${run.total})")
+    }
+
+    /** Ends one app of a Repair all run; returns false when no run is active. */
+    private fun recordBatchResult(success: Boolean, message: String): Boolean {
+        val run = batch ?: return false
+        if (success) run.repaired += run.current else run.failed += "${run.current}: ${message.lineSequence().first()}"
+        retry = null
+        cleanUpPatchFiles()
+        nextInBatch()
+        return true
     }
 
     fun confirmUninstall() {
@@ -310,6 +390,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun failInstall(label: String, result: PatchResult, originalRemoved: Boolean, reason: String) {
+        Logbook.log("Install of $label failed (original removed: $originalRemoved): $reason")
+        // Repair all only does in-place updates, so the previous patched copy is still installed.
+        if (!originalRemoved && recordBatchResult(false, reason)) return
         retry = Retry(label, result, originalRemoved)
         val warning = if (originalRemoved) {
             "\n\nThe original app was already uninstalled. Tap Try again to install the patched copy. " +
@@ -399,6 +482,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun onInstallEvent(event: InstallEvent) {
         val wait = waiting ?: return
         if (event.attempt != wait.attempt) return
+        Logbook.log("Android: ${event.op} ${event.packageName} status=${event.status} ${event.message.orEmpty()}")
 
         if (event.needsUserAction) {
             val confirm = event.confirmIntent
@@ -429,10 +513,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             Stage.INSTALL_PATCHED -> {
                 if (event.isSuccess) {
+                    Logbook.log("Installed ${wait.packageName}")
                     finishAndClean(
                         "${wait.label} is ready for your car",
                         "Connect your phone to the car. The app appears in the Android Auto launcher.\n\n" +
-                            "If it doesn't, check that Android Auto's Unknown sources setting is on (setup guide).",
+                            "If it doesn't, check that Android Auto's Unknown sources setting is on (setup guide).\n\n" +
+                            "What changed:\n" + wait.result!!.changes.joinToString("\n") { "• $it" },
                         success = true,
                     )
                 } else {
@@ -478,6 +564,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _userAction.value = null
         wait.sessionId?.let { Installer.abandon(context, it) }
         val message = reason ?: "Cancelled."
+        Logbook.log("Stopped waiting for ${wait.stage} of ${wait.packageName}: $message")
+        // Cancel stops a whole Repair all run, not just the current app.
+        batch?.let { run ->
+            batch = null
+            retry = null
+            cleanUpPatchFiles()
+            _job.value = JobState.Finished(
+                false,
+                "Repair all stopped",
+                "$message Repaired ${run.repaired.size} of ${run.total} apps before stopping.",
+            )
+            refresh()
+            return
+        }
         when (wait.stage) {
             Stage.INSTALL_PATCHED -> failInstall(wait.label, wait.result!!, wait.originalRemoved, message)
             Stage.UNINSTALL_ORIGINAL -> keepForUnresolvedUninstall(wait, "${wait.label} was not changed", message)
@@ -515,6 +615,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun finishAndClean(title: String, message: String, success: Boolean = false) {
+        Logbook.log("${if (success) "Done" else "Failed"}: $title. ${message.lineSequence().first()}")
+        if (recordBatchResult(success, message)) return
         retry = null
         _job.value = JobState.Finished(success, title, message)
         cleanUpPatchFiles()

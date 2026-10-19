@@ -87,6 +87,17 @@ object InstalledApps {
         false
     }
 
+    /**
+     * Launcher components currently enabled for [packageName] (activity or alias names), so an
+     * in-place re-patch keeps the icon the user chose, for example an alternate app icon.
+     */
+    fun enabledLauncherComponents(context: Context, packageName: String): Set<String> {
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(packageName)
+        return context.packageManager.queryIntentActivities(launcher, PackageManager.ResolveInfoFlags.of(0))
+            .map { it.activityInfo.name }
+            .toSet()
+    }
+
     fun isInstalled(context: Context, packageName: String): Boolean =
         packageInfo(context.packageManager, packageName) != null
 
