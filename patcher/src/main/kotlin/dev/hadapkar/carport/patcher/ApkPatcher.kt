@@ -87,7 +87,6 @@ class ApkPatcher(private val key: SigningKey) {
             manifestPatcher.patch { addAutomotiveDescriptor(module) }
 
             stripSignatures(module)
-            module.refreshTable()
             module.refreshManifest()
             writeUnsigned(module, output)
             return BaseInfo(packageName, manifest.versionCode, manifest.versionName, manifestPatcher.changes)
@@ -96,17 +95,26 @@ class ApkPatcher(private val key: SigningKey) {
         }
     }
 
-    /** Adds res/xml/carport_automotive_app_desc.xml and returns its resource id. */
+    /**
+     * Adds res/xml/carport_automotive_app_desc.xml and returns its resource id. The table is
+     * edited as raw bytes ([ArscAppender]) because fully parsing a big app's table (Samsung
+     * Browser, Firefox) needs more memory than a phone gives an app.
+     */
     private fun addAutomotiveDescriptor(module: ApkModule): Int {
-        val table = module.getTableBlock(false)
+        val tableSource = module.getInputSource(TABLE_FILE)
             ?: throw PatchException("This app has no resource table (resources.arsc), so its car declaration cannot be added.")
-        val packageBlock = table.pickOne(APP_PACKAGE_ID) ?: table.pickOne()
-            ?: throw PatchException("The app's resource table has no package.")
-        val entry = packageBlock.getOrCreate("", "xml", AUTOMOTIVE_DESC_NAME)
-        entry.setValueAsString(AUTOMOTIVE_DESC_PATH)
+        val original = tableSource.openStream().use { it.readBytes() }
+        val edited = try {
+            ArscAppender.addXmlFile(original, AUTOMOTIVE_DESC_NAME, AUTOMOTIVE_DESC_PATH)
+        } catch (e: IllegalStateException) {
+            throw PatchException("This app's resource table has an unsupported layout (${e.message}).", e)
+        }
+        module.removeInputSource(TABLE_FILE)
+        // Keep the original storage method: Android requires resources.arsc to stay uncompressed.
+        module.add(ByteInputSource(edited.table, TABLE_FILE).apply { method = tableSource.method })
         module.removeInputSource(AUTOMOTIVE_DESC_PATH)
         module.add(ByteInputSource(automotiveDescriptorXml(), AUTOMOTIVE_DESC_PATH))
-        return entry.resourceId
+        return edited.resourceId
     }
 
     private fun rewriteSplit(input: File, output: File) {
@@ -169,7 +177,7 @@ class ApkPatcher(private val key: SigningKey) {
         const val AUTOMOTIVE_DESC_NAME = "carport_automotive_app_desc"
         const val AUTOMOTIVE_DESC_PATH = "res/xml/$AUTOMOTIVE_DESC_NAME.xml"
 
-        private const val APP_PACKAGE_ID = 0x7f
+        private const val TABLE_FILE = "resources.arsc"
         private const val SIGNER_NAME = "CARPORT"
         /** v2/v3 only: CarPort itself needs Android 15, so v1 signatures are never needed. */
         private const val SIGNING_MIN_SDK = 28

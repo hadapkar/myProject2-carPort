@@ -22,6 +22,8 @@ dependencies {
 tasks.test {
     // Optional real-world fixture: -PtestApk=/path/to/any.apk
     providers.gradleProperty("testApk").orNull?.let { systemProperty("carport.testApk", it) }
+    // Phones give apps a small heap; -PtestHeap=256m checks the patcher fits.
+    maxHeapSize = providers.gradleProperty("testHeap").getOrElse("1g")
     testLogging {
         events("passed", "skipped", "failed")
         showStandardStreams = true

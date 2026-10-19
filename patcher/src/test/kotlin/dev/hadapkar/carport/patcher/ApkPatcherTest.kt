@@ -82,6 +82,16 @@ class ApkPatcherTest {
         patched.copyTo(File("build/patched-fixture.apk"), overwrite = true)
     }
 
+    /** Patch only (no full-table re-parse), so -PtestHeap measures what the phone needs. */
+    @Test
+    fun patchFitsInHeap() {
+        val apk = requireFixture()
+        val runtime = Runtime.getRuntime()
+        val result = ApkPatcher(key).patch(apk, outputDir = tempDir())
+        assertSignedWithKey(result.apks.single())
+        println("Patched within a ${runtime.maxMemory() / (1024 * 1024)} MB heap")
+    }
+
     @Test
     fun repatchingIsIdempotent() {
         val apk = requireFixture()

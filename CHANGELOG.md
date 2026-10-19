@@ -6,6 +6,15 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.1.1] - 2026-10-19
+
+### Fixed
+
+- Large apps such as Samsung Browser and Firefox no longer fail with "The phone ran out of
+  memory". CarPort now adds its one resource without loading the app's whole resource table,
+  so patching Firefox needs under 96 MB instead of over 192 MB.
+- CarPort may use a larger memory allowance on phones that offer one.
+
 ## [0.1.0] - 2026-10-19
 
 First release.
