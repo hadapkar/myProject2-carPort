@@ -10,3 +10,4 @@ build/
 *.jks
 *.p12
 /keystore/
+.vscode/
