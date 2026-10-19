@@ -6,6 +6,19 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.3.0] - 2026-10-20
+
+### Added
+
+All off by default, in Settings › Car media controls and Smart play button:
+
+- **Resume when the car connects**: a paused song (for example in Samsung Browser) starts
+  playing a moment after the phone connects to Android Auto.
+- **Pause when the car disconnects**: the music doesn't continue out loud from the phone
+  speaker when you leave the car.
+- **"Open my music link" tile** in CarPort's car browse screen, shown when a music link is
+  saved: tap it to open the link in Samsung Browser.
+
 ## [0.2.7] - 2026-10-20
 
 ### Added

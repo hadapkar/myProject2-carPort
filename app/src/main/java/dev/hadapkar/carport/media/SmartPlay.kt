@@ -32,11 +32,16 @@ object SmartPlay {
         return (uri.scheme == "https" || uri.scheme == "http") && !uri.host.isNullOrBlank()
     }
 
-    /** Opens the saved link if the feature is on; returns true when a page was opened. */
-    fun openIfEnabled(context: Context): Boolean {
-        val settings = SettingsStore(context)
-        if (!settings.smartPlayEnabled) return false
-        val link = settings.smartPlayUrl
+    /** Opens the saved link if the automatic smart play button is on. */
+    fun openIfEnabled(context: Context): Boolean =
+        SettingsStore(context).smartPlayEnabled && open(context)
+
+    /** A valid link is saved, so the car can offer the "Open my music link" tile. */
+    fun hasLink(context: Context): Boolean = isValidLink(SettingsStore(context).smartPlayUrl)
+
+    /** Opens the saved link (explicit request, e.g. the car tile); returns true when a page opened. */
+    fun open(context: Context): Boolean {
+        val link = SettingsStore(context).smartPlayUrl
         if (!isValidLink(link)) {
             Logbook.log("Smart play: the saved link is not a web address")
             return false

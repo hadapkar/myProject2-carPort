@@ -57,7 +57,16 @@ class CarMediaService : MediaBrowserService() {
             )
             .setIconBitmap(MediaMirror.sourceArt())
             .build()
-        result.sendResult(mutableListOf(MediaBrowser.MediaItem(description, MediaBrowser.MediaItem.FLAG_PLAYABLE)))
+        val items = mutableListOf(MediaBrowser.MediaItem(description, MediaBrowser.MediaItem.FLAG_PLAYABLE))
+        if (SmartPlay.hasLink(this)) {
+            val openLink = MediaDescription.Builder()
+                .setMediaId(MediaMirror.OPEN_LINK_MEDIA_ID)
+                .setTitle("Open my music link")
+                .setSubtitle("Opens your saved link in Samsung Browser")
+                .build()
+            items += MediaBrowser.MediaItem(openLink, MediaBrowser.MediaItem.FLAG_PLAYABLE)
+        }
+        result.sendResult(items)
     }
 
     private companion object {

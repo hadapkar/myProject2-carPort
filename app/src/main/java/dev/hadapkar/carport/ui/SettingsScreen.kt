@@ -131,6 +131,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                         "Android Auto.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
+                CarConnectionSwitches()
                 OutlinedButton(onClick = onTestMedia) { Text("Test without a car") }
             }
 
@@ -251,6 +252,33 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
             dismissButton = { TextButton(onClick = { confirmImport = false }) { Text("Cancel") } },
         )
     }
+}
+
+/** What happens to the music when the phone connects to or disconnects from the car. */
+@Composable
+private fun CarConnectionSwitches() {
+    val context = LocalContext.current
+    val store = remember { SettingsStore(context) }
+    var resume by remember { mutableStateOf(store.resumeOnConnect) }
+    var pause by remember { mutableStateOf(store.pauseOnDisconnect) }
+    SwitchItem(
+        title = "Resume when the car connects",
+        body = "If a song is paused (for example in Samsung Browser), play it a moment after the phone connects to Android Auto.",
+        checked = resume,
+        onCheckedChange = {
+            resume = it
+            store.resumeOnConnect = it
+        },
+    )
+    SwitchItem(
+        title = "Pause when the car disconnects",
+        body = "Stops the music continuing out loud from the phone speaker when you leave the car.",
+        checked = pause,
+        onCheckedChange = {
+            pause = it
+            store.pauseOnDisconnect = it
+        },
+    )
 }
 
 /** Smart play button: open a saved music link when play is pressed and nothing can be resumed. */

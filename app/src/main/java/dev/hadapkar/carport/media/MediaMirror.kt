@@ -64,9 +64,43 @@ object MediaMirror {
 
     /** From the Android Auto connection watcher. */
     fun onCarConnection(context: Context, connected: Boolean) {
+        val wasConnected = carConnected
         carConnected = connected
-        if (connected) start(context) else stopIfUnused()
+        val settings = SettingsStore(context)
+        if (connected) {
+            start(context)
+            if (!wasConnected && settings.resumeOnConnect) scheduleResume()
+        } else {
+            // Only a real disconnect, not the first "not connected" report when CarPort starts.
+            if (wasConnected && settings.pauseOnDisconnect) pauseForDisconnect()
+            stopIfUnused()
+        }
     }
+
+    private val resumeRunnable = Runnable {
+        val controller = source ?: return@Runnable
+        if (carConnected && controller.playbackState?.state == PlaybackState.STATE_PAUSED) {
+            Logbook.log("Car media: resuming ${controller.packageName} after connecting")
+            controller.transportControls.play()
+        }
+    }
+
+    /** Waits briefly so the car's audio is ready, then resumes a paused song. */
+    private fun scheduleResume() {
+        handler.removeCallbacks(resumeRunnable)
+        handler.postDelayed(resumeRunnable, RESUME_DELAY_MS)
+    }
+
+    private fun pauseForDisconnect() {
+        handler.removeCallbacks(resumeRunnable)
+        val controller = source ?: return
+        if (controller.playbackState?.state == PlaybackState.STATE_PLAYING) {
+            Logbook.log("Car media: pausing ${controller.packageName} because the car disconnected")
+            controller.transportControls.pause()
+        }
+    }
+
+    private const val RESUME_DELAY_MS = 2_000L
 
     /** Android Auto bound (or unbound) CarPort's media service. */
     fun onServiceBound(context: Context, bound: Boolean) {
@@ -336,7 +370,15 @@ object MediaMirror {
         override fun onSeekTo(pos: Long) { controls?.seekTo(pos) }
         override fun onFastForward() { controls?.fastForward() }
         override fun onRewind() { controls?.rewind() }
-        override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) = playOrOpenLink()
+        override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
+            if (mediaId == OPEN_LINK_MEDIA_ID) {
+                // The car's "Open my music link" tile: the user asked for it explicitly.
+                val app = appContext ?: return
+                if (SmartPlay.open(app)) _preview.value = _preview.value.copy(state = "Opened your music link in the browser")
+                return
+            }
+            playOrOpenLink()
+        }
         // "Hey Google, play …" in the car: resume whatever the phone was playing.
         override fun onPlayFromSearch(query: String?, extras: Bundle?) = playOrOpenLink()
 
@@ -373,7 +415,10 @@ object MediaMirror {
         PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or
         PlaybackState.ACTION_SEEK_TO or PlaybackState.ACTION_FAST_FORWARD or PlaybackState.ACTION_REWIND
 
-    private const val SMART_PLAY_ACTIONS = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_PAUSE or
+    /** Media id of the car browse tile that opens the saved music link. */
+    const val OPEN_LINK_MEDIA_ID = "open_music_link"
+
+    private const val SMART_PLAY_ACTIONS =PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_PAUSE or
         PlaybackState.ACTION_PLAY_FROM_MEDIA_ID or PlaybackState.ACTION_PLAY_FROM_SEARCH
 
     /** Shown in the car even if the app doesn't advertise them; presses fall back to media keys. */
