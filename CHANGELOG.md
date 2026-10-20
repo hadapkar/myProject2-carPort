@@ -6,6 +6,20 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.6.0] - 2026-10-21
+
+### Added
+
+Both off by default, in Settings › Car music, and working in the Classic and Media3 engines:
+
+- **−10 s / +10 s buttons** in the car player, shown when the playing song allows seeking.
+- **Hold next/previous to skip 10 s** on the steering wheel: a tap still changes the song (on
+  release), and holding jumps 10 s, repeating every half second while held. Works with cars
+  that repeat the key while it's held or send fast-forward/rewind; the log shows what your car
+  sends.
+- "Test without a car" has **−10 s / +10 s** buttons and **Hold ⏮ / Hold ⏭**, which imitate
+  holding a steering-wheel button.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added

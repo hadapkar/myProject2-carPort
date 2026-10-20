@@ -10,7 +10,12 @@ import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
+import android.os.Bundle
+import androidx.media3.session.CommandButton
 import androidx.media3.session.LibraryResult
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import androidx.media3.session.MediaSession
@@ -67,8 +72,6 @@ object Media3Engine {
         val app = context.applicationContext
         appContext = app
         val player = MirrorPlayer(Looper.getMainLooper())
-        refreshListener = player::refresh
-        MediaMirror.addChangeListener(refreshListener!!)
         val created = MediaLibrarySession.Builder(app, player, LibraryCallback)
             .setId("CarPort")
             .setSessionActivity(
@@ -80,6 +83,17 @@ object Media3Engine {
             )
             .build()
         session = created
+        // Refresh the player on every change; update the ±10 s buttons only when they come or go.
+        var buttonsShown: Boolean? = null
+        refreshListener = {
+            player.refresh()
+            val shown = MediaMirror.skipButtonsShown()
+            if (shown != buttonsShown) {
+                buttonsShown = shown
+                created.setMediaButtonPreferences(skipButtons())
+            }
+        }
+        MediaMirror.addChangeListener(refreshListener!!)
         // Refresh the car's browse list (now playing + music link tile) when the source changes.
         browseListener = { created.notifyChildrenChanged(ROOT_ID, Int.MAX_VALUE, null) }
         MediaMirror.addSourceChangedListener(browseListener!!)
@@ -105,8 +119,52 @@ object Media3Engine {
 
     private const val ROOT_ID = "root"
 
-    /** Browse tree (now playing + music link tile) and raw steering-wheel keys. */
+    private val rewindCommand = SessionCommand(MediaMirror.ACTION_REWIND_10, Bundle.EMPTY)
+    private val forwardCommand = SessionCommand(MediaMirror.ACTION_FORWARD_10, Bundle.EMPTY)
+
+    /** The car player's −10 s / +10 s buttons, when turned on and the playing app allows seeking. */
+    private fun skipButtons(): List<CommandButton> =
+        if (!MediaMirror.skipButtonsShown()) {
+            emptyList()
+        } else {
+            listOf(
+                CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
+                    .setSessionCommand(rewindCommand)
+                    .setDisplayName("Back 10 seconds")
+                    .build(),
+                CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10)
+                    .setSessionCommand(forwardCommand)
+                    .setDisplayName("Forward 10 seconds")
+                    .build(),
+            )
+        }
+
+    /** Browse tree (now playing + music link tile), ±10 s buttons and raw steering-wheel keys. */
     private object LibraryCallback : MediaLibrarySession.Callback {
+        override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult =
+            MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+                .setAvailableSessionCommands(
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+                        .add(rewindCommand)
+                        .add(forwardCommand)
+                        .build()
+                )
+                .setMediaButtonPreferences(skipButtons())
+                .build()
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == MediaMirror.ACTION_REWIND_10 || customCommand.customAction == MediaMirror.ACTION_FORWARD_10) {
+                MediaMirror.sendCustomAction(customCommand.customAction, args)
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
+        }
+
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,

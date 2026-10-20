@@ -93,6 +93,8 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
     val store = remember { SettingsStore(context) }
 
     var useMedia3 by remember { mutableStateOf(store.useMedia3) }
+    var skipButtons by remember { mutableStateOf(store.skipButtons) }
+    var holdToSeek by remember { mutableStateOf(store.holdToSeek) }
     var resumeOnConnect by remember { mutableStateOf(store.resumeOnConnect) }
     var pauseOnDisconnect by remember { mutableStateOf(store.pauseOnDisconnect) }
     var smartPlay by remember { mutableStateOf(store.smartPlayEnabled) }
@@ -152,6 +154,10 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 learnMore = "Android Auto shows music playing on your phone (for example in Samsung Browser) in " +
                     "CarPort's player, and the steering wheel, the car screen and \"Hey Google\" control it. It " +
                     "runs only while the phone is connected to Android Auto.\n\n" +
+                    "Hold to skip 10 s works when your car repeats the next/previous key while you hold it (most " +
+                    "do) or sends fast-forward/rewind; with it on, a tap changes the song when you release the " +
+                    "button. If your car sends only one press however long you hold, a hold acts like a tap. The " +
+                    "log shows what your car sends.\n\n" +
                     "Media engine: Classic uses Android's own media system and is the proven default. Media3 is " +
                     "Google's newer library and works the same way; if anything misbehaves in the car, turn it " +
                     "off to go back to Classic.\n\n" +
@@ -186,6 +192,27 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                     summary = "See and try the car's music player on your phone",
                     onClick = onTestMedia,
                 ) { Chevron() }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Refresh,
+                    title = "−10 s / +10 s buttons",
+                    summary = "Extra buttons in the car player (when the song allows seeking)",
+                    checked = skipButtons,
+                ) {
+                    skipButtons = it
+                    store.skipButtons = it
+                    MediaMirror.refresh()
+                }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Refresh,
+                    title = "Hold next/previous to skip 10 s",
+                    summary = "Steering wheel: tap changes song, hold jumps 10 s",
+                    checked = holdToSeek,
+                ) {
+                    holdToSeek = it
+                    store.holdToSeek = it
+                }
                 Divider()
                 SwitchRow(
                     icon = Icons.Filled.PlayArrow,

@@ -155,6 +155,39 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
                 }
             }
 
+            val skipStore = remember { SettingsStore(context) }
+            Section("Skip 10 seconds")
+            Hint(
+                "−10 s / +10 s buttons: ${if (skipStore.skipButtons) "on" else "off"} · " +
+                    "Hold to skip: ${if (skipStore.holdToSeek) "on" else "off"} (change in Settings)"
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = {
+                        car.transportControls.sendCustomAction(MediaMirror.ACTION_REWIND_10, null)
+                        lastAction = "Car: back 10 seconds"
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("−10 s") }
+                OutlinedButton(
+                    onClick = {
+                        car.transportControls.sendCustomAction(MediaMirror.ACTION_FORWARD_10, null)
+                        lastAction = "Car: forward 10 seconds"
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("+10 s") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { holdKey(car, KeyEvent.KEYCODE_MEDIA_PREVIOUS); lastAction = "Steering wheel: hold previous" },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Hold ⏮") }
+                OutlinedButton(
+                    onClick = { holdKey(car, KeyEvent.KEYCODE_MEDIA_NEXT); lastAction = "Steering wheel: hold next" },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Hold ⏭") }
+            }
+
             Section("Car connection")
             val store = remember { SettingsStore(context) }
             Hint(
@@ -428,6 +461,18 @@ private fun Section(title: String) {
 @Composable
 private fun Hint(text: String) {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/**
+ * Imitates holding a steering-wheel key on a car that repeats it while held: press, two repeats
+ * (as Android sends them), release.
+ */
+private fun holdKey(car: MediaController, keyCode: Int) {
+    val down = SystemClock.uptimeMillis()
+    car.dispatchMediaButtonEvent(KeyEvent(down, down, KeyEvent.ACTION_DOWN, keyCode, 0))
+    car.dispatchMediaButtonEvent(KeyEvent(down, down + 500, KeyEvent.ACTION_DOWN, keyCode, 1))
+    car.dispatchMediaButtonEvent(KeyEvent(down, down + 1000, KeyEvent.ACTION_DOWN, keyCode, 2))
+    car.dispatchMediaButtonEvent(KeyEvent(down, down + 1100, KeyEvent.ACTION_UP, keyCode, 0))
 }
 
 private fun formatTime(ms: Long): String {

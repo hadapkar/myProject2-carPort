@@ -39,6 +39,16 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_USE_MEDIA3, false)
         set(value) = prefs.edit { putBoolean(KEY_USE_MEDIA3, value) }
 
+    /** Show −10 s / +10 s buttons in the car player (when the playing app allows seeking). */
+    var skipButtons: Boolean
+        get() = prefs.getBoolean(KEY_SKIP_BUTTONS, false)
+        set(value) = prefs.edit { putBoolean(KEY_SKIP_BUTTONS, value) }
+
+    /** Holding the steering wheel's next/previous jumps 10 s; a tap still changes the song. */
+    var holdToSeek: Boolean
+        get() = prefs.getBoolean(KEY_HOLD_TO_SEEK, false)
+        set(value) = prefs.edit { putBoolean(KEY_HOLD_TO_SEEK, value) }
+
     /** Pause the mirrored app when the phone disconnects from Android Auto. */
     var pauseOnDisconnect: Boolean
         get() = prefs.getBoolean(KEY_PAUSE_ON_DISCONNECT, false)
@@ -65,6 +75,8 @@ class SettingsStore(context: Context) {
         private const val KEY_PAUSE_ON_DISCONNECT = "pause_on_disconnect"
         private const val KEY_EXPRESSIVE_DESIGN = "expressive_design"
         private const val KEY_USE_MEDIA3 = "use_media3"
+        private const val KEY_SKIP_BUTTONS = "skip_buttons"
+        private const val KEY_HOLD_TO_SEEK = "hold_to_seek"
         private const val KEY_RESUME_ON_CONNECT = "resume_on_connect"
         private const val KEY_UNLOCK_ORIENTATION = "unlock_orientation"
         private const val KEY_FORCE_RESIZEABLE = "force_resizeable"
