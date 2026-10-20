@@ -76,6 +76,17 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- Quick Settings tile that opens the saved music link in Samsung Browser. -->
+        <service
+            android:name=".media.MusicLinkTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_media_play"
+            android:label="@string/tile_music_link"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <!-- Only to be granted notification access, which Android requires for seeing other
              apps' media sessions. Notification contents are never read. -->
         <service

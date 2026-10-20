@@ -17,6 +17,7 @@ import androidx.media3.common.util.UnstableApi
 import dev.hadapkar.carport.MainActivity
 import dev.hadapkar.carport.R
 import dev.hadapkar.carport.data.Logbook
+import dev.hadapkar.carport.data.RecentlyPlayed
 import dev.hadapkar.carport.data.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +41,8 @@ object MediaMirror {
     private var session: MediaSession? = null
     private var sessionManager: MediaSessionManager? = null
     private var source: MediaController? = null
+    /** A session that just ended; never picked again (Android may still list it for a moment). */
+    private var endedToken: MediaSession.Token? = null
     private var listening = false
 
     /** Called when the mirrored app changes, so each engine's car browse list can refresh. */
@@ -73,7 +76,7 @@ object MediaMirror {
         val settings = SettingsStore(context)
         if (connected) {
             start(context)
-            if (!wasConnected && settings.resumeOnConnect) scheduleResume()
+            if (!wasConnected && (settings.resumeOnConnect || settings.openLinkOnConnect)) scheduleResume()
         } else {
             // Only a real disconnect, not the first "not connected" report when CarPort starts.
             if (wasConnected && settings.pauseOnDisconnect) pauseForDisconnect()
@@ -90,11 +93,11 @@ object MediaMirror {
         val settings = SettingsStore(context)
         Logbook.log("Car media: simulated car ${if (connected) "connect" else "disconnect"}")
         return if (connected) {
-            if (!settings.resumeOnConnect) {
-                "Resume when the car connects is off, so nothing happens"
+            if (!settings.resumeOnConnect && !settings.openLinkOnConnect) {
+                "Resume and open-link on connect are both off, so nothing happens"
             } else {
                 scheduleResume()
-                "Will resume a paused song in 2 seconds"
+                "In 2 seconds: resume a paused song, or open your music link if there's nothing to resume"
             }
         } else {
             if (!settings.pauseOnDisconnect) "Pause when the car disconnects is off, so nothing happens"
@@ -102,11 +105,26 @@ object MediaMirror {
         }
     }
 
+    /**
+     * After connecting: playing → leave it; paused and resume-on-connect on → resume; otherwise,
+     * with open-link-on-connect on, open the saved music link in Samsung Browser.
+     */
     private val resumeRunnable = Runnable {
-        val controller = source ?: return@Runnable
-        if ((carConnected || testMode) && controller.playbackState?.state == PlaybackState.STATE_PAUSED) {
-            Logbook.log("Car media: resuming ${controller.packageName} after connecting")
-            controller.transportControls.play()
+        val app = appContext ?: return@Runnable
+        if (!(carConnected || testMode)) return@Runnable
+        val settings = SettingsStore(app)
+        val controller = source
+        val state = controller?.playbackState?.state
+        when {
+            state == PlaybackState.STATE_PLAYING -> Unit
+            controller != null && state == PlaybackState.STATE_PAUSED && settings.resumeOnConnect -> {
+                Logbook.log("Car media: resuming ${controller.packageName} after connecting")
+                controller.transportControls.play()
+            }
+            settings.openLinkOnConnect -> {
+                Logbook.log("Car media: nothing to resume after connecting, opening the music link")
+                if (SmartPlay.open(app)) _preview.value = _preview.value.copy(state = "Opened your music link in the browser")
+            }
         }
     }
 
@@ -265,8 +283,10 @@ object MediaMirror {
             refreshSessions()
         }
         override fun onSessionDestroyed() {
-            setSource(null)
+            // Pick the replacement while still knowing which app we followed, skipping the dead session.
+            endedToken = source?.sessionToken
             refreshSessions()
+            if (source?.sessionToken == endedToken) setSource(null)
         }
     }
 
@@ -276,14 +296,27 @@ object MediaMirror {
         runCatching { pickSource(sessionManager?.getActiveSessions(MediaAccessListener.component(app)).orEmpty()) }
     }
 
-    /** Prefers a playing session; otherwise keeps the current one or takes the most recent. */
+    /**
+     * Prefers a playing session; otherwise keeps the current one. If the current app replaced its
+     * session (Samsung Browser does when the track changes), stays with that app instead of
+     * jumping to another app's paused session for a moment.
+     */
     private fun pickSource(controllers: List<MediaController>) {
         val own = appContext?.packageName
-        val candidates = controllers.filter { it.packageName != own }
+        val ended = endedToken
+        val candidates = controllers.filter { it.packageName != own && it.sessionToken != ended }
         val playing = candidates.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
         val current = source?.let { cur -> candidates.firstOrNull { it.sessionToken == cur.sessionToken } }
-        setSource(playing ?: current ?: candidates.firstOrNull())
+        val followedApp = source?.packageName ?: lastFollowedPackage
+        val sameApp = followedApp?.let { pkg -> candidates.firstOrNull { it.packageName == pkg } }
+        // Before anything was followed, take the most recent session (e.g. a paused song to resume).
+        // After that, only switch to a different app when it's actually playing.
+        val fallback = if (followedApp == null) candidates.firstOrNull() else null
+        setSource(playing ?: current ?: sameApp ?: fallback)
     }
+
+    /** The app last followed, kept while its session is being replaced. */
+    private var lastFollowedPackage: String? = null
 
     private fun setSource(controller: MediaController?) {
         if (controller?.sessionToken == source?.sessionToken) {
@@ -292,6 +325,7 @@ object MediaMirror {
         }
         source?.unregisterCallback(sourceCallback)
         source = controller
+        if (controller != null) lastFollowedPackage = controller.packageName
         controller?.registerCallback(sourceCallback, handler)
         Logbook.log("Car media: mirroring ${controller?.packageName ?: "nothing"}")
         mirror()
@@ -368,6 +402,7 @@ object MediaMirror {
         )
         // Only the selected engine's session may be active, so the car sees one CarPort player.
         session.isActive = MediaEngine.isClassic(app)
+        recordRecentlyPlayed(app, controller, sourceState)
         _preview.value = Preview(
             running = listening,
             sourceApp = sourceLabel(),
@@ -379,6 +414,19 @@ object MediaMirror {
         )
         notifyChange()
     }
+
+    /** Adds the song to Recently played when it starts playing (once per song). */
+    private fun recordRecentlyPlayed(app: Context, controller: MediaController, state: PlaybackState?) {
+        if (state?.state != PlaybackState.STATE_PLAYING) return
+        val title = controller.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() } ?: return
+        val artist = controller.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+        val key = "${controller.packageName}|$title|$artist"
+        if (key == lastRecorded) return
+        lastRecorded = key
+        RecentlyPlayed.add(app, title, artist, sourceLabel())
+    }
+
+    private var lastRecorded: String? = null
 
     private fun notifyChange() {
         // Copy: a listener may remove itself while being called.
@@ -488,13 +536,24 @@ object MediaMirror {
 
     // Hold-to-seek state: whether the next/previous key being held became a hold.
     private var heldLong = false
+    private var heldForward = false
     private var lastHoldSeek = 0L
+
+    /** Tap fallback: if the release never arrives, the press still changes the song. */
+    private val tapFallback = Runnable {
+        Logbook.log("Car media: no key release received, treating the press as a tap")
+        heldLong = false
+        if (heldForward) skipToNext() else skipToPrevious()
+    }
 
     /**
      * "Hold next/previous to skip 10 s" (setting, off by default). A tap still changes the song,
      * on release; holding (the car repeats the key) jumps 10 s, again every [HOLD_SEEK_INTERVAL_MS]
      * while held. Cars that send fast-forward/rewind keys for a hold get the same jumps.
-     * Returns true when the key was handled here.
+     *
+     * Media3 passes only the first press of a key to apps (no repeats, no release), so a hold
+     * can't be seen there: with the Media3 engine next/previous act at once, and only dedicated
+     * fast-forward/rewind keys jump 10 s. Returns true when the key was handled here.
      */
     private fun handleHoldToSeek(event: KeyEvent): Boolean {
         val app = appContext ?: return false
@@ -505,6 +564,8 @@ object MediaMirror {
             else -> return false
         }
         val seekKey = event.keyCode == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD || event.keyCode == KeyEvent.KEYCODE_MEDIA_REWIND
+        // Media3: next/previous go through normally (forwarded at once); only seek keys are handled.
+        if (!seekKey && !MediaEngine.isClassic(app)) return false
         if (event.action == KeyEvent.ACTION_DOWN) {
             Logbook.log("Car media: key ${event.keyCode} down, repeat ${event.repeatCount}")
         }
@@ -521,10 +582,14 @@ object MediaMirror {
             // First press of next/previous: wait to see whether it becomes a hold.
             event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
                 heldLong = false
+                heldForward = forward
+                handler.removeCallbacks(tapFallback)
+                handler.postDelayed(tapFallback, TAP_FALLBACK_MS)
             }
             // Repeats while held: a hold, so jump instead of changing the song.
             event.action == KeyEvent.ACTION_DOWN -> {
                 heldLong = true
+                handler.removeCallbacks(tapFallback)
                 if (now - lastHoldSeek >= HOLD_SEEK_INTERVAL_MS) {
                     lastHoldSeek = now
                     seekBy(if (forward) SKIP_MS else -SKIP_MS)
@@ -532,6 +597,7 @@ object MediaMirror {
             }
             // Released: a tap changes the song; a hold already jumped.
             event.action == KeyEvent.ACTION_UP -> {
+                handler.removeCallbacks(tapFallback)
                 if (!heldLong) {
                     if (forward) skipToNext() else skipToPrevious()
                 }
@@ -542,6 +608,8 @@ object MediaMirror {
     }
 
     private const val HOLD_SEEK_INTERVAL_MS = 500L
+    /** A hold repeats within about half a second; no repeat and no release after this means a tap. */
+    private const val TAP_FALLBACK_MS = 1_500L
 
     /** Uses the app's own action when it offers one, otherwise a media key press like a headset. */
     private fun skip(action: Long, keyCode: Int, viaAction: (MediaController.TransportControls) -> Unit) {

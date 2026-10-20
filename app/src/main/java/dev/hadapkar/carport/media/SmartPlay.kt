@@ -69,6 +69,18 @@ object SmartPlay {
         return false
     }
 
+    /**
+     * The saved link as an "open" intent for something the user starts directly (the Quick
+     * Settings tile): Samsung Browser if it can open it, otherwise any browser. Null without a link.
+     */
+    fun viewIntent(context: Context): Intent? {
+        val link = SettingsStore(context).smartPlayUrl.trim()
+        if (!isValidLink(link)) return null
+        val view = Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val samsung = Intent(view).setPackage(SAMSUNG_BROWSER)
+        return if (samsung.resolveActivity(context.packageManager) != null) samsung else view
+    }
+
     private fun start(context: Context, intent: Intent): Boolean = try {
         context.startActivity(intent)
         true

@@ -49,6 +49,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_HOLD_TO_SEEK, false)
         set(value) = prefs.edit { putBoolean(KEY_HOLD_TO_SEEK, value) }
 
+    /** On connecting, if there's no song to resume, open the saved music link in Samsung Browser. */
+    var openLinkOnConnect: Boolean
+        get() = prefs.getBoolean(KEY_OPEN_LINK_ON_CONNECT, false)
+        set(value) = prefs.edit { putBoolean(KEY_OPEN_LINK_ON_CONNECT, value) }
+
     /** Pause the mirrored app when the phone disconnects from Android Auto. */
     var pauseOnDisconnect: Boolean
         get() = prefs.getBoolean(KEY_PAUSE_ON_DISCONNECT, false)
@@ -77,6 +82,7 @@ class SettingsStore(context: Context) {
         private const val KEY_USE_MEDIA3 = "use_media3"
         private const val KEY_SKIP_BUTTONS = "skip_buttons"
         private const val KEY_HOLD_TO_SEEK = "hold_to_seek"
+        private const val KEY_OPEN_LINK_ON_CONNECT = "open_link_on_connect"
         private const val KEY_RESUME_ON_CONNECT = "resume_on_connect"
         private const val KEY_UNLOCK_ORIENTATION = "unlock_orientation"
         private const val KEY_FORCE_RESIZEABLE = "force_resizeable"

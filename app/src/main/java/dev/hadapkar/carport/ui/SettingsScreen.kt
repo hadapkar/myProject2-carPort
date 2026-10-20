@@ -83,7 +83,13 @@ import dev.hadapkar.carport.update.UpdateChecker
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: () -> Unit, onTestMedia: () -> Unit) {
+fun SettingsScreen(
+    viewModel: MainViewModel,
+    onBack: () -> Unit,
+    onOpenSetup: () -> Unit,
+    onTestMedia: () -> Unit,
+    onOpenRecent: () -> Unit,
+) {
     val context = LocalContext.current
     val options by viewModel.options.collectAsStateWithLifecycle()
     val keyInfo by viewModel.keyInfo.collectAsStateWithLifecycle()
@@ -95,6 +101,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
     var useMedia3 by remember { mutableStateOf(store.useMedia3) }
     var skipButtons by remember { mutableStateOf(store.skipButtons) }
     var holdToSeek by remember { mutableStateOf(store.holdToSeek) }
+    var openLinkOnConnect by remember { mutableStateOf(store.openLinkOnConnect) }
     var resumeOnConnect by remember { mutableStateOf(store.resumeOnConnect) }
     var pauseOnDisconnect by remember { mutableStateOf(store.pauseOnDisconnect) }
     var smartPlay by remember { mutableStateOf(store.smartPlayEnabled) }
@@ -165,7 +172,9 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                     "was closed), CarPort opens your music link in Samsung Browser, or another browser if Samsung " +
                     "Browser can't. On a locked phone the page appears after unlocking, and the browser may need " +
                     "one tap to start. Android only allows opening the browser from the background with " +
-                    "\"Display over other apps\"; CarPort never draws over other apps.",
+                    "\"Display over other apps\"; CarPort never draws over other apps.\n\n" +
+                    "Quick Settings tile: swipe down from the top of the screen, tap the pencil (edit), and drag " +
+                    "\"Music link\" into your tiles. Tapping it opens your music link.",
             ) {
                 ActionRow(
                     icon = Icons.Filled.PlayArrow,
@@ -225,6 +234,16 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 }
                 Divider()
                 SwitchRow(
+                    icon = Icons.Filled.Star,
+                    title = "Open my music link when the car connects",
+                    summary = "If there's no song to resume (needs Display over other apps)",
+                    checked = openLinkOnConnect,
+                ) {
+                    openLinkOnConnect = it
+                    store.openLinkOnConnect = it
+                }
+                Divider()
+                SwitchRow(
                     icon = Icons.Filled.Clear,
                     title = "Pause when the car disconnects",
                     summary = "No music from the phone speaker when you leave",
@@ -250,6 +269,13 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                     title = "Music link",
                     summary = musicLink,
                     onClick = { editingLink = true },
+                ) { Chevron() }
+                Divider()
+                ActionRow(
+                    icon = Icons.Filled.Menu,
+                    title = "Recently played",
+                    summary = "Songs played through car media controls",
+                    onClick = onOpenRecent,
                 ) { Chevron() }
                 Divider()
                 ActionRow(

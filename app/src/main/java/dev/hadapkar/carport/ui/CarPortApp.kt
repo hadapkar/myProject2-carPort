@@ -12,7 +12,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 
-private enum class Screen { APPS, SETUP, SETTINGS, CAR_PREVIEW }
+private enum class Screen { APPS, SETUP, SETTINGS, CAR_PREVIEW, RECENT }
 
 @Composable
 fun CarPortApp(viewModel: MainViewModel = viewModel()) {
@@ -52,7 +52,7 @@ fun CarPortApp(viewModel: MainViewModel = viewModel()) {
     )
 
     if (screen != Screen.APPS) {
-        BackHandler { screen = if (screen == Screen.CAR_PREVIEW) Screen.SETTINGS else Screen.APPS }
+        BackHandler { screen = if (screen == Screen.CAR_PREVIEW || screen == Screen.RECENT) Screen.SETTINGS else Screen.APPS }
     }
     when (screen) {
         Screen.APPS -> AppsScreen(
@@ -70,7 +70,9 @@ fun CarPortApp(viewModel: MainViewModel = viewModel()) {
             onBack = { screen = Screen.APPS },
             onOpenSetup = { screen = Screen.SETUP },
             onTestMedia = { screen = Screen.CAR_PREVIEW },
+            onOpenRecent = { screen = Screen.RECENT },
         )
+        Screen.RECENT -> RecentlyPlayedScreen(onBack = { screen = Screen.SETTINGS })
         Screen.CAR_PREVIEW -> CarPreviewScreen(
             onBack = { screen = Screen.SETTINGS },
             onOpenSetup = { screen = Screen.SETUP },

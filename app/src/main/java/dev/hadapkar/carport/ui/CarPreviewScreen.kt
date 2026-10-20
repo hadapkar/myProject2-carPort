@@ -191,8 +191,9 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
             Section("Car connection")
             val store = remember { SettingsStore(context) }
             Hint(
-                "Resume when the car connects: ${if (store.resumeOnConnect) "on" else "off"} · " +
-                    "Pause when the car disconnects: ${if (store.pauseOnDisconnect) "on" else "off"} (change in Settings)"
+                "Resume on connect: ${if (store.resumeOnConnect) "on" else "off"} · " +
+                    "Open music link on connect: ${if (store.openLinkOnConnect) "on" else "off"} · " +
+                    "Pause on disconnect: ${if (store.pauseOnDisconnect) "on" else "off"} (change in Settings)"
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(

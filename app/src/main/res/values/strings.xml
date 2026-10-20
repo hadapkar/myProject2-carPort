@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">CarPort</string>
     <string name="media_access_label">CarPort car media controls</string>
+    <string name="tile_music_link">Music link</string>
 </resources>

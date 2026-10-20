@@ -6,6 +6,28 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.7.0] - 2026-10-21
+
+### Added
+
+- **Open my music link when the car connects** (Settings › Car music, off by default): if there's
+  no paused song to resume after connecting, CarPort opens your saved link in Samsung Browser.
+- **"Music link" Quick Settings tile**: add it from the Quick Settings edit screen; one tap opens
+  your music link (Samsung Browser first).
+- **Recently played** (Settings › Car music): the last 30 songs played through car media
+  controls, stored only on this phone, with a clear button.
+
+### Fixed
+
+- **Hold to skip 10 s with the Media3 engine**: Media3 gives apps only the first press of a key
+  (no repeats, no release), so next/previous waited for a release that never came and did
+  nothing. With Media3 they now act immediately; hold-to-skip works with the Classic engine (and
+  with cars that send fast-forward/rewind keys in both). With Classic, a missing release still
+  counts as a tap after 1.5 s.
+- **Car controls briefly jumping to another app**: when Samsung Browser replaced its media
+  session between songs, CarPort could follow another app's paused session (e.g. YouTube) for a
+  moment. It now stays with the same app and only switches to an app that is actually playing.
+
 ## [0.6.0] - 2026-10-21
 
 ### Added
