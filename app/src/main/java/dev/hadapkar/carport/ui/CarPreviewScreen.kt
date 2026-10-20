@@ -1,5 +1,7 @@
 package dev.hadapkar.carport.ui
 
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
@@ -42,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -49,6 +52,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +63,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -96,6 +101,16 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
         onDispose { MediaMirror.stopTest() }
     }
 
+    // Landscape view: car screens are wide, so this rotates the phone while on this screen.
+    val activity = remember(context) { context.findActivity() }
+    var landscape by rememberSaveable { mutableStateOf(false) }
+    DisposableEffect(landscape) {
+        activity?.requestedOrientation =
+            if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+    val wide = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     fun pressKey(keyCode: Int, label: String) {
         car.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
         car.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
@@ -110,6 +125,9 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
                 title = { Text("Test without a car") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
+                },
+                actions = {
+                    TextButton(onClick = { landscape = !landscape }) { Text(if (landscape) "Portrait" else "Landscape") }
                 },
                 scrollBehavior = scrollBehavior,
             )
@@ -140,7 +158,7 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            CarDisplay(preview, car) { lastAction = it }
+            CarDisplay(preview, car, wide) { lastAction = it }
 
             Section("Steering-wheel buttons")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -238,7 +256,7 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
  * artwork behind, artwork with title/artist/app, progress bar and the round play button.
  */
 @Composable
-private fun CarDisplay(preview: MediaMirror.Preview, car: MediaController, onAction: (String) -> Unit) {
+private fun CarDisplay(preview: MediaMirror.Preview, car: MediaController, wide: Boolean, onAction: (String) -> Unit) {
     val art = preview.art
     Box(
         Modifier
@@ -259,54 +277,76 @@ private fun CarDisplay(preview: MediaMirror.Preview, car: MediaController, onAct
         Box(Modifier.matchParentSize().background(Color(0xCC0B0B0B)))
 
         Row(Modifier.fillMaxWidth()) {
-            AppRail()
-            Column(Modifier.weight(1f).padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(104.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF2A2A2A)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (art != null) {
-                            Image(art.asImageBitmap(), "Artwork", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        } else {
-                            Text("♪", color = Color(0xFF9E9E9E), style = MaterialTheme.typography.headlineLarge)
-                        }
-                    }
-                    Column(Modifier.padding(start = 16.dp)) {
-                        Text(
-                            preview.title ?: if (preview.running) "Nothing is playing" else preview.state,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        preview.artist?.let {
-                            Text(it, color = Color(0xFFBDBDBD), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            listOfNotNull("CarPort", preview.sourceApp).joinToString(" · "),
-                            color = Color(0xFF9E9E9E),
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                        )
+            AppRail(showClock = wide)
+            if (wide) {
+                // Android Auto's landscape player: large artwork left, details and controls right.
+                Row(Modifier.weight(1f).padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Artwork(art, 180.dp)
+                    Column(Modifier.weight(1f).padding(start = 24.dp)) {
+                        TrackInfo(preview, large = true)
+                        Spacer(Modifier.height(16.dp))
+                        CarSeekBar(car, onAction)
+                        CarControls(preview, car, onAction)
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                CarSeekBar(car, onAction)
-                CarControls(preview, car, onAction)
+            } else {
+                Column(Modifier.weight(1f).padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Artwork(art, 104.dp)
+                        Column(Modifier.padding(start = 16.dp)) { TrackInfo(preview, large = false) }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    CarSeekBar(car, onAction)
+                    CarControls(preview, car, onAction)
+                }
             }
         }
     }
 }
 
+@Composable
+private fun Artwork(art: android.graphics.Bitmap?, size: androidx.compose.ui.unit.Dp) {
+    Box(
+        Modifier
+            .size(size)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF2A2A2A)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (art != null) {
+            Image(art.asImageBitmap(), "Artwork", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        } else {
+            Text("♪", color = Color(0xFF9E9E9E), style = MaterialTheme.typography.headlineLarge)
+        }
+    }
+}
+
+/** Title, artist and "CarPort · app", as Android Auto shows them. */
+@Composable
+private fun TrackInfo(preview: MediaMirror.Preview, large: Boolean) {
+    Text(
+        preview.title ?: if (preview.running) "Nothing is playing" else preview.state,
+        color = Color.White,
+        style = if (large) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+    preview.artist?.let {
+        Text(it, color = Color(0xFFBDBDBD), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    Spacer(Modifier.height(4.dp))
+    Text(
+        listOfNotNull("CarPort", preview.sourceApp).joinToString(" · "),
+        color = Color(0xFF9E9E9E),
+        style = MaterialTheme.typography.labelMedium,
+        maxLines = 1,
+    )
+}
+
 /** Android Auto's left rail: navigation, media (active), phone, notifications, app launcher. */
 @Composable
-private fun AppRail() {
+private fun AppRail(showClock: Boolean) {
     Column(
         Modifier
             .width(56.dp)
@@ -316,6 +356,14 @@ private fun AppRail() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
+        if (showClock) {
+            val locale = LocalConfiguration.current.locales[0]
+            Text(
+                java.text.SimpleDateFormat("H:mm", locale).format(java.util.Date()),
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
         RailIcon(Icons.Filled.Place, active = false)
         Box(Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF2E2E2E)), contentAlignment = Alignment.Center) {
             Icon(painterResource(R.drawable.ic_media_play), contentDescription = "Media", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -331,14 +379,38 @@ private fun RailIcon(icon: ImageVector, active: Boolean) {
     Icon(icon, contentDescription = null, tint = if (active) Color.White else Color(0xFF8A8A8A), modifier = Modifier.size(22.dp))
 }
 
-/** Previous, the large round play/pause button, next: Android Auto's control row. */
+/**
+ * Android Auto's control row: previous, the large round play/pause, next, with the session's
+ * custom buttons (CarPort's −10 s / +10 s) on either side. The custom buttons are read from
+ * CarPort's live session, the same list Android Auto reads, so they show here exactly when they
+ * show in the car.
+ */
 @Composable
 private fun CarControls(preview: MediaMirror.Preview, car: MediaController, onAction: (String) -> Unit) {
+    var customActions by remember { mutableStateOf(car.playbackState?.customActions.orEmpty()) }
+    DisposableEffect(car) {
+        val callback = object : MediaController.Callback() {
+            override fun onPlaybackStateChanged(state: PlaybackState?) {
+                customActions = state?.customActions.orEmpty()
+            }
+        }
+        car.registerCallback(callback)
+        onDispose { car.unregisterCallback(callback) }
+    }
+    val rewind = customActions.firstOrNull { it.action == MediaMirror.ACTION_REWIND_10 }
+    val forward = customActions.firstOrNull { it.action == MediaMirror.ACTION_FORWARD_10 }
+
     Row(
         Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (rewind != null) {
+            CarIcon(R.drawable.ic_media_rewind, rewind.name.toString()) {
+                car.transportControls.sendCustomAction(rewind.action, null)
+                onAction("Car: back 10 seconds")
+            }
+        }
         CarIcon(R.drawable.ic_media_previous, "Previous") {
             car.transportControls.skipToPrevious()
             onAction("Car: previous")
@@ -365,6 +437,19 @@ private fun CarControls(preview: MediaMirror.Preview, car: MediaController, onAc
             car.transportControls.skipToNext()
             onAction("Car: next")
         }
+        if (forward != null) {
+            CarIcon(R.drawable.ic_media_forward, forward.name.toString()) {
+                car.transportControls.sendCustomAction(forward.action, null)
+                onAction("Car: forward 10 seconds")
+            }
+        }
+    }
+    if (rewind == null && SettingsStore(LocalContext.current).skipButtons) {
+        Text(
+            "−10 s / +10 s appear here (and in the car) while a song that allows seeking is playing.",
+            color = Color(0xFF9E9E9E),
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 
@@ -482,4 +567,11 @@ private fun formatTime(ms: Long): String {
     val m = (total % 3600) / 60
     val s = total % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+/** The Activity hosting [this] context, for requesting the screen orientation. */
+private tailrec fun android.content.Context.findActivity(): android.app.Activity? = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

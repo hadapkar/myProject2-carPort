@@ -6,6 +6,18 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.7.1] - 2026-10-21
+
+### Changed
+
+- **"Test without a car" shows the −10 s / +10 s buttons in the car player row** (⏪ ⏮ ▶ ⏭ ⏩),
+  read from CarPort's live media session, the same list Android Auto reads, so they appear
+  there exactly when they appear in the car (option on and a seekable song playing).
+- **Landscape view** in "Test without a car" (button in the top bar): rotates the phone while on
+  that screen and lays the player out like Android Auto's wide screen, with large artwork left and
+  details and controls right. The data and buttons are exactly what the car gets; the exact look
+  is drawn by Android Auto itself and varies by car and Android Auto version.
+
 ## [0.7.0] - 2026-10-21
 
 ### Added
