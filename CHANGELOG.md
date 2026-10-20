@@ -6,6 +6,19 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.4.0] - 2026-10-21
+
+### Changed
+
+- **Built with the latest stable Android tools and libraries:** Android Gradle Plugin 9.4.1,
+  Gradle 9.8.2, Kotlin 2.4.21, Compose BOM 2026.09.00 (Material 3 1.4), Activity 1.13,
+  Lifecycle 2.11, Core 1.19.1, Car App Library 1.7.0, apksig 9.4.1, Bouncy Castle 1.86,
+  Coroutines 1.11.0, compiled against Android 17 (API 37).
+- **Compatibility fallbacks:** CarPort still targets Android 15 (API 35) so Android's newer
+  background-launch and install rules don't change its behaviour, and ARSCLib stays on 1.3.5
+  because 1.4.0 renamed the manifest-editing API the patcher relies on.
+- The APK is larger (about 38 MB instead of 29 MB) because of the newer libraries.
+
 ## [0.3.3] - 2026-10-20
 
 ### Changed

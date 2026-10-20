@@ -57,7 +57,7 @@ APK Signature Scheme v2 + v3. Libraries used: [ARSCLib](https://github.com/REAnd
 ## Development
 
 ```sh
-./gradlew assembleRelease :app:testReleaseUnitTest :app:lintRelease
+./gradlew assembleRelease :app:testDebugUnitTest :app:lintRelease
 ./gradlew :patcher:test -PtestApk=/path/to/any.apk   # patch a real APK and verify it
 ```
 

@@ -1,16 +1,20 @@
 [versions]
-agp = "8.7.3"
-kotlin = "2.0.21"
-coroutines = "1.9.0"
-coreKtx = "1.15.0"
-activityCompose = "1.9.3"
-lifecycle = "2.8.7"
-composeBom = "2024.12.01"
+# Latest stable versions (Oct 2026). Fallbacks if one stops building: AGP 8.13.2,
+# Kotlin 2.2.x, Compose BOM 2025.x; see CHANGELOG 0.4.0.
+agp = "9.4.1"
+kotlin = "2.4.21"
+coroutines = "1.11.0"
+coreKtx = "1.19.1"
+activityCompose = "1.13.0"
+lifecycle = "2.11.0"
+composeBom = "2026.09.00"
+# Fallback: 1.4.0 (latest) renamed the element/attribute API the patcher uses; 1.3.5 is the
+# newest compatible version and the one every patch test was verified against.
 arsclib = "1.3.5"
-apksig = "8.7.3"
-bouncycastle = "1.78.1"
+apksig = "9.4.1"
+bouncycastle = "1.86"
 junit = "4.13.2"
-carApp = "1.4.0"
+carApp = "1.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,6 +37,5 @@ androidx-car-app = { group = "androidx.car.app", name = "app", version.ref = "ca
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

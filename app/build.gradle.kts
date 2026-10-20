@@ -1,8 +1,9 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
+// AGP 9 compiles Kotlin itself (built-in Kotlin), so there is no separate Kotlin Android plugin.
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -27,12 +28,15 @@ val appVersionCode: Int = run {
 
 android {
     namespace = "dev.hadapkar.carport"
-    compileSdk = 35
+    // Build against the newest Android (17) for the latest libraries...
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.hadapkar.carport"
         // Android Auto only projects ordinary activities from Android 15 on.
         minSdk = 35
+        // ...but keep Android 15's behaviour: newer targets tighten background launches and
+        // installs, which CarPort relies on. This is the compatibility fallback.
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersionName
@@ -65,9 +69,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -78,7 +79,15 @@ android {
                 "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
                 "META-INF/DEPENDENCIES",
             )
+            // Bouncy Castle 1.86 ships the same licence in each of its jars; keep one copy.
+            pickFirsts += setOf("META-INF/LICENSE.md", "META-INF/NOTICE.md")
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 

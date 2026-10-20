@@ -44,7 +44,7 @@ jobs:
           } > keystore/keystore.properties
 
       - name: Build, lint and unit test
-        run: ./gradlew assembleRelease :app:testReleaseUnitTest :app:lintRelease
+        run: ./gradlew assembleRelease :app:testDebugUnitTest :app:lintRelease
 
       - name: Patcher tests (patch CarPort's own APK)
         run: ./gradlew :patcher:test -PtestApk="$PWD/app/build/outputs/apk/release/app-release.apk"
