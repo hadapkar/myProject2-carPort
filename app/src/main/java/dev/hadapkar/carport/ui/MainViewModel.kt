@@ -105,6 +105,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _options = MutableStateFlow(settings.options)
     val options: StateFlow<PatchOptions> = _options.asStateFlow()
 
+    private val _expressiveDesign = MutableStateFlow(settings.expressiveDesign)
+    /** Design style for CarPort's own screens; classic Material 3 is the fallback. */
+    val expressiveDesign: StateFlow<Boolean> = _expressiveDesign.asStateFlow()
+
+    fun setExpressiveDesign(enabled: Boolean) {
+        settings.expressiveDesign = enabled
+        _expressiveDesign.value = enabled
+    }
+
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update.asStateFlow()
     private var autoUpdateChecked = false

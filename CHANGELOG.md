@@ -6,6 +6,15 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.4.1] - 2026-10-21
+
+### Added
+
+- **Expressive design** (Settings › CarPort, on by default): the parts of Material 3 Expressive
+  that stable Material 3 offers, with rounder, larger shapes and bolder titles. Turn it off for
+  the classic Material look. Expressive motion is still internal to the stable library, so it
+  will come with a later Material 3 release.
+
 ## [0.4.0] - 2026-10-21
 
 ### Changed

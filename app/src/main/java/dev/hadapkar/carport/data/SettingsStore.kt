@@ -29,6 +29,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getBoolean(KEY_SMART_PLAY_ENABLED, false)
         set(value) = prefs.edit { putBoolean(KEY_SMART_PLAY_ENABLED, value) }
 
+    /** Design style: Material 3 Expressive (true) or classic Material 3 (false, the fallback). */
+    var expressiveDesign: Boolean
+        get() = prefs.getBoolean(KEY_EXPRESSIVE_DESIGN, true)
+        set(value) = prefs.edit { putBoolean(KEY_EXPRESSIVE_DESIGN, value) }
+
     /** Pause the mirrored app when the phone disconnects from Android Auto. */
     var pauseOnDisconnect: Boolean
         get() = prefs.getBoolean(KEY_PAUSE_ON_DISCONNECT, false)
@@ -53,6 +58,7 @@ class SettingsStore(context: Context) {
         private const val KEY_SMART_PLAY_ENABLED = "smart_play_enabled"
         private const val KEY_SMART_PLAY_URL = "smart_play_url"
         private const val KEY_PAUSE_ON_DISCONNECT = "pause_on_disconnect"
+        private const val KEY_EXPRESSIVE_DESIGN = "expressive_design"
         private const val KEY_RESUME_ON_CONNECT = "resume_on_connect"
         private const val KEY_UNLOCK_ORIENTATION = "unlock_orientation"
         private const val KEY_FORCE_RESIZEABLE = "force_resizeable"

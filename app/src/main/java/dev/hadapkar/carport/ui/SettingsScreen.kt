@@ -88,6 +88,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
     val keyInfo by viewModel.keyInfo.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
     val setup by viewModel.setup.collectAsStateWithLifecycle()
+    val expressive by viewModel.expressiveDesign.collectAsStateWithLifecycle()
     val store = remember { SettingsStore(context) }
 
     var resumeOnConnect by remember { mutableStateOf(store.resumeOnConnect) }
@@ -289,6 +290,13 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                         ) { Text("Check") }
                     }
                 }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Face,
+                    title = "Expressive design",
+                    summary = if (expressive) "Rounder shapes and bolder titles" else "Classic Material design",
+                    checked = expressive,
+                ) { viewModel.setExpressiveDesign(it) }
                 Divider()
                 ActionRow(
                     icon = Icons.Filled.Lock,
