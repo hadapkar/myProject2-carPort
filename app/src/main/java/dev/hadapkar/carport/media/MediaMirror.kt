@@ -184,6 +184,11 @@ object MediaMirror {
         sessionManager = app.getSystemService(MediaSessionManager::class.java)
         return MediaSession(app, "CarPort").apply {
             setCallback(ForwardingCallback(), handler)
+            // Keep previous/next on the car screen; the ±10 s buttons go beside or after them.
+            setExtras(Bundle().apply {
+                putBoolean("android.media.playback.ALWAYS_RESERVE_SPACE_FOR.ACTION_SKIP_TO_PREVIOUS", true)
+                putBoolean("android.media.playback.ALWAYS_RESERVE_SPACE_FOR.ACTION_SKIP_TO_NEXT", true)
+            })
             // "Open on phone" from the car's media screen opens CarPort.
             setSessionActivity(
                 PendingIntent.getActivity(

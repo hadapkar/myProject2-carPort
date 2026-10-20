@@ -12,6 +12,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.util.UnstableApi
 import android.os.Bundle
 import androidx.media3.session.CommandButton
+import androidx.media3.session.MediaConstants
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
@@ -81,6 +82,7 @@ object Media3Engine {
                     PendingIntent.FLAG_IMMUTABLE,
                 )
             )
+            .setSessionExtras(reservePrevNext())
             .build()
         session = created
         // Refresh the player on every change; update the ±10 s buttons only when they come or go.
@@ -119,6 +121,12 @@ object Media3Engine {
 
     private const val ROOT_ID = "root"
 
+    /** Tells Android Auto to keep previous/next on screen, never replacing them with other buttons. */
+    private fun reservePrevNext() = Bundle().apply {
+        putBoolean(MediaConstants.EXTRAS_KEY_SLOT_RESERVATION_SEEK_TO_PREV, true)
+        putBoolean(MediaConstants.EXTRAS_KEY_SLOT_RESERVATION_SEEK_TO_NEXT, true)
+    }
+
     private val rewindCommand = SessionCommand(MediaMirror.ACTION_REWIND_10, Bundle.EMPTY)
     private val forwardCommand = SessionCommand(MediaMirror.ACTION_FORWARD_10, Bundle.EMPTY)
 
@@ -128,13 +136,16 @@ object Media3Engine {
             emptyList()
         } else {
             listOf(
+                // Secondary slots, so previous/next keep the back/forward places beside play.
                 CommandButton.Builder(CommandButton.ICON_SKIP_BACK_10)
                     .setSessionCommand(rewindCommand)
                     .setDisplayName("Back 10 seconds")
+                    .setSlots(CommandButton.SLOT_BACK_SECONDARY, CommandButton.SLOT_OVERFLOW)
                     .build(),
                 CommandButton.Builder(CommandButton.ICON_SKIP_FORWARD_10)
                     .setSessionCommand(forwardCommand)
                     .setDisplayName("Forward 10 seconds")
+                    .setSlots(CommandButton.SLOT_FORWARD_SECONDARY, CommandButton.SLOT_OVERFLOW)
                     .build(),
             )
         }

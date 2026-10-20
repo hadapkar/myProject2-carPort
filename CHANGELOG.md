@@ -6,6 +6,15 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.7.2] - 2026-10-21
+
+### Fixed
+
+- **Previous / next buttons missing on the car screen when −10 s / +10 s are on.** The ±10 s
+  buttons took the previous/next places. They now go in the secondary places (or the overflow
+  menu, if the car has no room), and CarPort tells Android Auto to always keep space for previous
+  and next, in both the Classic and Media3 engines.
+
 ## [0.7.1] - 2026-10-21
 
 ### Changed
