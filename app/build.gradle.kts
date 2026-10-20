@@ -101,6 +101,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     // Only for CarConnection: car media controls run while the phone is connected to Android Auto.
     implementation(libs.androidx.car.app)
+    // Media3 engine for car media controls (Settings › Media engine); Classic stays the fallback.
+    implementation(libs.androidx.media3.session)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

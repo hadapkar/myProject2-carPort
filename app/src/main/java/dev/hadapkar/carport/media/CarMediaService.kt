@@ -15,17 +15,19 @@ import android.service.media.MediaBrowserService
  * CarPort being opened first.
  */
 class CarMediaService : MediaBrowserService() {
+    // One object, so the same listener is added and removed.
+    private val browseChanged: () -> Unit = { notifyChildrenChanged(ROOT_ID) }
 
     override fun onCreate() {
         super.onCreate()
         sessionToken = MediaMirror.sessionToken(this)
-        MediaMirror.onSourceChanged = { notifyChildrenChanged(ROOT_ID) }
+        MediaMirror.addSourceChangedListener(browseChanged)
         // Android Auto binding this service means the phone is in the car.
         MediaMirror.onServiceBound(this, bound = true)
     }
 
     override fun onDestroy() {
-        MediaMirror.onSourceChanged = null
+        MediaMirror.removeSourceChangedListener(browseChanged)
         MediaMirror.onServiceBound(this, bound = false)
         super.onDestroy()
     }

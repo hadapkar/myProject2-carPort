@@ -88,7 +88,7 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
     val granted = remember { MediaAccessListener.isGranted(context) }
     val preview by MediaMirror.preview.collectAsStateWithLifecycle()
     // The same client view Android Auto has of CarPort's session.
-    val car = remember { MediaController(context, MediaMirror.sessionToken(context)) }
+    val car = remember { MediaController(context, MediaMirror.carToken(context)) }
     var lastAction by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {

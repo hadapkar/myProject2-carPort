@@ -63,6 +63,19 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+        <!-- The same car media controls built on Google's Media3 library (Settings › Media engine).
+             Disabled by default; only one of the two media services is enabled at a time. -->
+        <service
+            android:name=".media.CarMedia3Service"
+            android:enabled="false"
+            android:exported="true"
+            android:label="@string/app_name"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
         <!-- Only to be granted notification access, which Android requires for seeing other
              apps' media sessions. Notification contents are never read. -->
         <service

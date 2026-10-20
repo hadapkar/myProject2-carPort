@@ -72,6 +72,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hadapkar.carport.data.Logbook
 import dev.hadapkar.carport.data.SettingsStore
+import dev.hadapkar.carport.media.MediaEngine
 import dev.hadapkar.carport.media.MediaMirror
 import dev.hadapkar.carport.media.SmartPlay
 import dev.hadapkar.carport.update.UpdateChecker
@@ -91,6 +92,7 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
     val expressive by viewModel.expressiveDesign.collectAsStateWithLifecycle()
     val store = remember { SettingsStore(context) }
 
+    var useMedia3 by remember { mutableStateOf(store.useMedia3) }
     var resumeOnConnect by remember { mutableStateOf(store.resumeOnConnect) }
     var pauseOnDisconnect by remember { mutableStateOf(store.pauseOnDisconnect) }
     var smartPlay by remember { mutableStateOf(store.smartPlayEnabled) }
@@ -150,6 +152,9 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                 learnMore = "Android Auto shows music playing on your phone (for example in Samsung Browser) in " +
                     "CarPort's player, and the steering wheel, the car screen and \"Hey Google\" control it. It " +
                     "runs only while the phone is connected to Android Auto.\n\n" +
+                    "Media engine: Classic uses Android's own media system and is the proven default. Media3 is " +
+                    "Google's newer library and works the same way; if anything misbehaves in the car, turn it " +
+                    "off to go back to Classic.\n\n" +
                     "Smart play: if you press play and there's no song to resume (for example the browser tab " +
                     "was closed), CarPort opens your music link in Samsung Browser, or another browser if Samsung " +
                     "Browser can't. On a locked phone the page appears after unlocking, and the browser may need " +
@@ -162,6 +167,18 @@ fun SettingsScreen(viewModel: MainViewModel, onBack: () -> Unit, onOpenSetup: ()
                     summary = if (setup.mediaAccessGranted) "Ready" else "Needs notification access",
                     onClick = if (setup.mediaAccessGranted) onTestMedia else onOpenSetup,
                 ) { StatusChip(if (setup.mediaAccessGranted) "On" else "Set up", ok = setup.mediaAccessGranted) }
+                Divider()
+                SwitchRow(
+                    icon = Icons.Filled.Build,
+                    title = "Use Media3 engine",
+                    summary = if (useMedia3) "Google's newer media library (try it; turn off if it misbehaves)"
+                    else "Off: Classic engine (proven)",
+                    checked = useMedia3,
+                ) {
+                    useMedia3 = it
+                    store.useMedia3 = it
+                    MediaEngine.apply(context)
+                }
                 Divider()
                 ActionRow(
                     icon = Icons.Filled.Face,

@@ -6,6 +6,18 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.5.0] - 2026-10-21
+
+### Added
+
+- **Media3 engine for car media controls** (Settings › Car music › Use Media3 engine, off by
+  default). The same car controls built on Google's current Media3 library (1.11.1): artwork,
+  title, progress bar, play/pause, next/previous, seeking, steering-wheel keys, the music link
+  tile, resume/pause on connect and smart play all work through it.
+- **Classic stays the default and the fallback.** If anything misbehaves with Media3 in your
+  car, turn the switch off: CarPort switches back immediately, and Android Auto only ever sees
+  one CarPort player. "Test without a car" uses whichever engine is selected.
+
 ## [0.4.1] - 2026-10-21
 
 ### Added

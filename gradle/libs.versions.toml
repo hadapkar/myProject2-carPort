@@ -15,6 +15,7 @@ apksig = "9.4.1"
 bouncycastle = "1.86"
 junit = "4.13.2"
 carApp = "1.7.0"
+media3 = "1.11.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,6 +35,7 @@ apksig = { group = "com.android.tools.build", name = "apksig", version.ref = "ap
 bouncycastle-pkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-car-app = { group = "androidx.car.app", name = "app", version.ref = "carApp" }
+androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
