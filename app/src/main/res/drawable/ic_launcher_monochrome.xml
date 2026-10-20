@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Single-colour version for Android's themed icons: bezel ring, tiles and dashboard. -->
+<!-- Single-colour version for Android's themed icons and Android Auto: rim, spokes, and the hub
+     with the play triangle cut out. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -7,12 +8,13 @@
     android:viewportHeight="108">
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M24,82 Q54,66 84,82 L84,86 Q54,71 24,86 Z M50,66 H58 V75 H50 Z" />
+        android:fillType="evenOdd"
+        android:pathData="M54,28 A26,26 0 1 1 54,80 A26,26 0 1 1 54,28 Z M54,34 A20,20 0 1 0 54,74 A20,20 0 1 0 54,34 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M33,50.5 H45 V57.5 H33 Z M63,50.5 H75 V57.5 H63 Z M50.5,63 H57.5 V75 H50.5 Z" />
     <path
         android:fillColor="#FFFFFF"
         android:fillType="evenOdd"
-        android:pathData="M36,32 H72 A6,6 0 0 1 78,38 V60 A6,6 0 0 1 72,66 H36 A6,6 0 0 1 30,60 V38 A6,6 0 0 1 36,32 Z M36.5,35 H71.5 A3.5,3.5 0 0 1 75,38.5 V59.5 A3.5,3.5 0 0 1 71.5,63 H36.5 A3.5,3.5 0 0 1 33,59.5 V38.5 A3.5,3.5 0 0 1 36.5,35 Z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,38 H50 A2,2 0 0 1 52,40 V46 A2,2 0 0 1 50,48 H38 A2,2 0 0 1 36,46 V40 A2,2 0 0 1 38,38 Z M58,38 H70 A2,2 0 0 1 72,40 V46 A2,2 0 0 1 70,48 H58 A2,2 0 0 1 56,46 V40 A2,2 0 0 1 58,38 Z M38,51 H50 A2,2 0 0 1 52,53 V58 A2,2 0 0 1 50,60 H38 A2,2 0 0 1 36,58 V53 A2,2 0 0 1 38,51 Z M58,51 H70 A2,2 0 0 1 72,53 V58 A2,2 0 0 1 70,60 H58 A2,2 0 0 1 56,58 V53 A2,2 0 0 1 58,51 Z" />
+        android:pathData="M54,42 A12,12 0 1 1 54,66 A12,12 0 1 1 54,42 Z M50,47.5 L61,54 L50,60.5 Z" />
 </vector>

@@ -6,6 +6,13 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.7.3] - 2026-10-21
+
+### Changed
+
+- **New CarPort logo**: a steering wheel with a play button as its hub, also used as the white
+  icon in Android Auto's media bar and for themed icons.
+
 ## [0.7.2] - 2026-10-21
 
 ### Fixed
