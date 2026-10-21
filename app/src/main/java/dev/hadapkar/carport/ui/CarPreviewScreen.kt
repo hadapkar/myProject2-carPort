@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.annotation.DrawableRes
@@ -177,7 +179,8 @@ fun CarPreviewScreen(onBack: () -> Unit, onOpenSetup: () -> Unit) {
             Section("Skip 10 seconds")
             Hint(
                 "−10 s / +10 s buttons: ${if (skipStore.skipButtons) "on" else "off"} · " +
-                    "Hold to skip: ${if (skipStore.holdToSeek) "on" else "off"} (change in Settings)"
+                    "Hold to skip: ${if (skipStore.holdToSeek) "on" else "off"} · " +
+                    "Keep skipping while held: ${if (skipStore.keepSkippingWhileHeld) "on" else "off"} (change in Settings)"
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(
@@ -550,15 +553,21 @@ private fun Hint(text: String) {
 }
 
 /**
- * Imitates holding a steering-wheel key on a car that repeats it while held: press, two repeats
- * (as Android sends them), release.
+ * Imitates holding a steering-wheel key for 2 seconds on a car that repeats it while held, in
+ * real time: press, a repeat every half second (as Android sends them), release.
  */
 private fun holdKey(car: MediaController, keyCode: Int) {
+    val handler = Handler(Looper.getMainLooper())
     val down = SystemClock.uptimeMillis()
     car.dispatchMediaButtonEvent(KeyEvent(down, down, KeyEvent.ACTION_DOWN, keyCode, 0))
-    car.dispatchMediaButtonEvent(KeyEvent(down, down + 500, KeyEvent.ACTION_DOWN, keyCode, 1))
-    car.dispatchMediaButtonEvent(KeyEvent(down, down + 1000, KeyEvent.ACTION_DOWN, keyCode, 2))
-    car.dispatchMediaButtonEvent(KeyEvent(down, down + 1100, KeyEvent.ACTION_UP, keyCode, 0))
+    for (repeat in 1..3) {
+        handler.postDelayed({
+            car.dispatchMediaButtonEvent(KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_DOWN, keyCode, repeat))
+        }, repeat * 500L)
+    }
+    handler.postDelayed({
+        car.dispatchMediaButtonEvent(KeyEvent(down, SystemClock.uptimeMillis(), KeyEvent.ACTION_UP, keyCode, 0))
+    }, 2_000L)
 }
 
 private fun formatTime(ms: Long): String {

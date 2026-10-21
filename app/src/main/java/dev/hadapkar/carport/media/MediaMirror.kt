@@ -451,6 +451,7 @@ object MediaMirror {
 
     /** Resumes the playing app, or, with nothing to resume, opens the smart play link. */
     fun playOrOpenLink() {
+        stopScan()
         val controller = source
         if (controller != null) {
             controller.transportControls.play()
@@ -464,13 +465,14 @@ object MediaMirror {
         }
     }
 
-    fun pause() { source?.transportControls?.pause() }
-    fun stopPlayback() { source?.transportControls?.stop() }
-    fun seekTo(positionMs: Long) { source?.transportControls?.seekTo(positionMs) }
+    fun pause() { stopScan(); source?.transportControls?.pause() }
+    fun stopPlayback() { stopScan(); source?.transportControls?.stop() }
+    fun seekTo(positionMs: Long) { stopScan(); source?.transportControls?.seekTo(positionMs) }
     fun fastForward() { source?.transportControls?.fastForward() }
     fun rewind() { source?.transportControls?.rewind() }
     /** CarPort's own −10 s / +10 s buttons are handled here; anything else goes to the playing app. */
     fun sendCustomAction(action: String, extras: Bundle?) {
+        stopScan()
         when (action) {
             ACTION_REWIND_10 -> seekBy(-SKIP_MS)
             ACTION_FORWARD_10 -> seekBy(SKIP_MS)
@@ -478,16 +480,20 @@ object MediaMirror {
         }
     }
 
-    /** Jumps [deltaMs] from the current position, kept within the song. */
-    fun seekBy(deltaMs: Long) {
-        val controller = source ?: return
-        val state = controller.playbackState ?: return
+    /**
+     * Jumps [deltaMs] from the current position, kept within the song. Returns false when there's
+     * nothing to seek or the jump reached the start or end of the song.
+     */
+    fun seekBy(deltaMs: Long): Boolean {
+        val controller = source ?: return false
+        val state = controller.playbackState ?: return false
         val speed = if (state.state == PlaybackState.STATE_PLAYING) state.playbackSpeed else 0f
         val now = state.position + ((android.os.SystemClock.elapsedRealtime() - state.lastPositionUpdateTime) * speed).toLong()
         val duration = controller.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0 } ?: Long.MAX_VALUE
         val target = (now + deltaMs).coerceIn(0L, duration)
         Logbook.log("Car media: ${if (deltaMs < 0) "back" else "forward"} ${kotlin.math.abs(deltaMs) / 1000} s")
         controller.transportControls.seekTo(target)
+        return target != 0L && target != duration
     }
 
     /** −10 s / +10 s buttons are shown when turned on and the playing app allows seeking. */
@@ -521,6 +527,8 @@ object MediaMirror {
      */
     fun forwardMediaKey(event: KeyEvent?): Boolean {
         event ?: return false
+        // Any other button stops a hold that's still skipping (e.g. when its release was lost).
+        if (event.keyCode != scanKey) stopScan()
         if (handleHoldToSeek(event)) return true
         val controller = source
         if (controller == null &&
@@ -542,7 +550,60 @@ object MediaMirror {
     // Hold-to-seek state: whether the next/previous key being held became a hold.
     private var heldLong = false
     private var heldForward = false
+
+    // A hold that's skipping: the key being held (0 when none), its direction and start time.
+    private var scanKey = 0
+    private var scanForward = false
+    private var scanStartedAt = 0L
+
+    /** Jumps 10 s now and every [HOLD_SEEK_INTERVAL_MS] until the key is released. */
+    private val scanStep = object : Runnable {
+        override fun run() {
+            if (scanKey == 0) return
+            if (android.os.SystemClock.elapsedRealtime() - scanStartedAt > MAX_HOLD_MS) {
+                Logbook.log("Car media: no key release after ${MAX_HOLD_MS / 1000} s, stopped skipping")
+                stopScan()
+                return
+            }
+            if (!seekBy(if (scanForward) SKIP_MS else -SKIP_MS)) {
+                stopScan()
+                return
+            }
+            handler.postDelayed(this, HOLD_SEEK_INTERVAL_MS)
+        }
+    }
+
+    // Without "Keep skipping while held": one jump per press or repeat, at most every half second.
     private var lastHoldSeek = 0L
+
+    /** A hold: keeps jumping until released with "Keep skipping while held", else jumps once. */
+    private fun holdJump(app: Context, keyCode: Int, forward: Boolean, firstPress: Boolean) {
+        if (SettingsStore(app).keepSkippingWhileHeld) {
+            startScan(keyCode, forward)
+            return
+        }
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (firstPress || now - lastHoldSeek >= HOLD_SEEK_INTERVAL_MS) {
+            lastHoldSeek = now
+            seekBy(if (forward) SKIP_MS else -SKIP_MS)
+        }
+    }
+
+    private fun startScan(keyCode: Int, forward: Boolean) {
+        if (scanKey == keyCode) return
+        stopScan()
+        scanKey = keyCode
+        scanForward = forward
+        scanStartedAt = android.os.SystemClock.elapsedRealtime()
+        Logbook.log("Car media: skipping ${if (forward) "forward" else "back"} while the button is held")
+        handler.post(scanStep)
+    }
+
+    private fun stopScan() {
+        if (scanKey == 0) return
+        scanKey = 0
+        handler.removeCallbacks(scanStep)
+    }
 
     /** Tap fallback: if the release never arrives, the press still changes the song. */
     private val tapFallback = Runnable {
@@ -554,7 +615,9 @@ object MediaMirror {
     /**
      * "Hold next/previous to skip 10 s" (setting, off by default). A tap still changes the song,
      * on release; holding (the car repeats the key) jumps 10 s, again every [HOLD_SEEK_INTERVAL_MS]
-     * while held. Cars that send fast-forward/rewind keys for a hold get the same jumps.
+     * until the release. Cars that send fast-forward/rewind keys for a hold get the same jumps.
+     * If the release never arrives, skipping stops at the song's end, on any other button, or
+     * after [MAX_HOLD_MS].
      *
      * Media3 passes only the first press of a key to apps (no repeats, no release), so a hold
      * can't be seen there: with the Media3 engine next/previous act at once, and only dedicated
@@ -573,17 +636,14 @@ object MediaMirror {
         if (!seekKey && !MediaEngine.isClassic(app)) return false
         if (event.action == KeyEvent.ACTION_DOWN) {
             Logbook.log("Car media: key ${event.keyCode} down, repeat ${event.repeatCount}")
+        } else if (event.action == KeyEvent.ACTION_UP) {
+            Logbook.log("Car media: key ${event.keyCode} up")
         }
-        val now = android.os.SystemClock.elapsedRealtime()
         when {
-            // A dedicated fast-forward / rewind key: jump on each press or repeat.
-            seekKey && event.action == KeyEvent.ACTION_DOWN -> {
-                if (now - lastHoldSeek >= HOLD_SEEK_INTERVAL_MS || event.repeatCount == 0) {
-                    lastHoldSeek = now
-                    seekBy(if (forward) SKIP_MS else -SKIP_MS)
-                }
-            }
-            seekKey -> Unit
+            // A dedicated fast-forward / rewind key: jump (and keep jumping until released, if on).
+            seekKey && event.action == KeyEvent.ACTION_DOWN ->
+                holdJump(app, event.keyCode, forward, firstPress = event.repeatCount == 0)
+            seekKey -> stopScan()
             // First press of next/previous: wait to see whether it becomes a hold.
             event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
                 heldLong = false
@@ -591,18 +651,16 @@ object MediaMirror {
                 handler.removeCallbacks(tapFallback)
                 handler.postDelayed(tapFallback, TAP_FALLBACK_MS)
             }
-            // Repeats while held: a hold, so jump instead of changing the song.
+            // Repeats while held: a hold, so keep jumping instead of changing the song.
             event.action == KeyEvent.ACTION_DOWN -> {
                 heldLong = true
                 handler.removeCallbacks(tapFallback)
-                if (now - lastHoldSeek >= HOLD_SEEK_INTERVAL_MS) {
-                    lastHoldSeek = now
-                    seekBy(if (forward) SKIP_MS else -SKIP_MS)
-                }
+                holdJump(app, event.keyCode, forward, firstPress = false)
             }
-            // Released: a tap changes the song; a hold already jumped.
+            // Released: a tap changes the song; a hold stops jumping.
             event.action == KeyEvent.ACTION_UP -> {
                 handler.removeCallbacks(tapFallback)
+                stopScan()
                 if (!heldLong) {
                     if (forward) skipToNext() else skipToPrevious()
                 }
@@ -613,6 +671,8 @@ object MediaMirror {
     }
 
     private const val HOLD_SEEK_INTERVAL_MS = 500L
+    /** Longest hold that keeps skipping (100 s of the song) if the car never sends the release. */
+    private const val MAX_HOLD_MS = 5_000L
     /** A hold repeats within about half a second; no repeat and no release after this means a tap. */
     private const val TAP_FALLBACK_MS = 1_500L
 

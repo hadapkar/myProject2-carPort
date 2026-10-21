@@ -6,6 +6,21 @@ All notable changes to CarPort are listed here. Versions follow
 Each release's section becomes its GitHub Release notes, which CarPort shows in its
 in-app update card.
 
+## [0.8.0] - 2026-10-21
+
+### Added
+
+- **Keep skipping while held** (Settings › Car music, under "Hold next/previous to skip 10 s",
+  off by default): holding a steering-wheel button jumps 10 s every half second until you let
+  go, instead of only once. If the car never tells the phone the button was released, skipping
+  stops at the end of the song, when you press any other button, or after 5 seconds. Turn it
+  off to get the single 10 s jump back.
+
+### Changed
+
+- The log shows each steering-wheel press and release ("key … down" / "key … up").
+- "Test without a car" › **Hold ⏮ / Hold ⏭** now hold the button for 2 seconds in real time.
+
 ## [0.7.3] - 2026-10-21
 
 ### Changed

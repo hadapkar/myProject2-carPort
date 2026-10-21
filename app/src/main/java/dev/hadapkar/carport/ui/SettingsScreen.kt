@@ -101,6 +101,7 @@ fun SettingsScreen(
     var useMedia3 by remember { mutableStateOf(store.useMedia3) }
     var skipButtons by remember { mutableStateOf(store.skipButtons) }
     var holdToSeek by remember { mutableStateOf(store.holdToSeek) }
+    var keepSkipping by remember { mutableStateOf(store.keepSkippingWhileHeld) }
     var openLinkOnConnect by remember { mutableStateOf(store.openLinkOnConnect) }
     var resumeOnConnect by remember { mutableStateOf(store.resumeOnConnect) }
     var pauseOnDisconnect by remember { mutableStateOf(store.pauseOnDisconnect) }
@@ -221,6 +222,18 @@ fun SettingsScreen(
                 ) {
                     holdToSeek = it
                     store.holdToSeek = it
+                }
+                if (holdToSeek) {
+                    Divider()
+                    SwitchRow(
+                        icon = Icons.Filled.Refresh,
+                        title = "Keep skipping while held",
+                        summary = "Jumps 10 s every half second until you let go (up to 5 s)",
+                        checked = keepSkipping,
+                    ) {
+                        keepSkipping = it
+                        store.keepSkippingWhileHeld = it
+                    }
                 }
                 Divider()
                 SwitchRow(
