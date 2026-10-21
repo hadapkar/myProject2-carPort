@@ -11,3 +11,6 @@ build/
 *.p12
 /keystore/
 .vscode/
+
+# IDE build output (VS Code Java extension)
+bin/
